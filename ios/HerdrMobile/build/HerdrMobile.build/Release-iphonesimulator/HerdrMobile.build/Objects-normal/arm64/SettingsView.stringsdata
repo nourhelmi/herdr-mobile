@@ -1,0 +1,104 @@
+{
+  "source": "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/HerdrMobile/SettingsView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Settings",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 72
+        }
+      },
+      {
+        "comment": "",
+        "key": "http://100.x.x.x:8787",
+        "location": {
+          "startingColumn": 27,
+          "startingLine": 12
+        }
+      },
+      {
+        "comment": "",
+        "key": "Sidecar base URL",
+        "location": {
+          "startingColumn": 41,
+          "startingLine": 18
+        }
+      },
+      {
+        "comment": "",
+        "key": "Sidecar",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 23
+        }
+      },
+      {
+        "comment": "",
+        "key": "HTTP to loopback, RFC1918, Tailscale 100.64/10, or *.ts.net. No auth — Tailscale is the boundary.",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 25
+        }
+      },
+      {
+        "comment": "",
+        "key": "Probe sidecar health",
+        "location": {
+          "startingColumn": 37,
+          "startingLine": 43
+        }
+      },
+      {
+        "comment": "",
+        "key": "Probing…",
+        "location": {
+          "startingColumn": 42,
+          "startingLine": 34
+        }
+      },
+      {
+        "comment": "",
+        "key": "Probe /health",
+        "location": {
+          "startingColumn": 57,
+          "startingLine": 34
+        }
+      },
+      {
+        "comment": "",
+        "key": "Link",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 51
+        }
+      },
+      {
+        "comment": "",
+        "key": "Default",
+        "location": {
+          "startingColumn": 32,
+          "startingLine": 55
+        }
+      },
+      {
+        "comment": "",
+        "key": "Socket",
+        "location": {
+          "startingColumn": 32,
+          "startingLine": 60
+        }
+      },
+      {
+        "comment": "",
+        "key": "Resolved",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 66
+        }
+      }
+    ]
+  },
+  "version": 1
+}

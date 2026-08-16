@@ -1,0 +1,12 @@
+{
+  "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/HerdrMobile/HerdrMobileApp.swift" : {
+    "abi-baseline-json" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/HerdrMobile.abi.json",
+    "const-values" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/HerdrMobile-primary.swiftconstvalues",
+    "dependencies" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/HerdrMobile-primary.d",
+    "diagnostics" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/HerdrMobile-primary.dia",
+    "objc-header" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/HerdrMobile-Swift.h",
+    "swiftdoc" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/HerdrMobile.swiftdoc",
+    "swiftmodule" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/HerdrMobile.swiftmodule",
+    "swiftsourceinfo" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/HerdrMobile.swiftsourceinfo"
+  }
+}

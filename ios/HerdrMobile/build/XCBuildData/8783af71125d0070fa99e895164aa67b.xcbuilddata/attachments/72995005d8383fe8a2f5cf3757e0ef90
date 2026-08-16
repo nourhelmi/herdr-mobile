@@ -1,0 +1,71 @@
+{
+  "" : {
+    "const-values" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/HerdrMobile-primary.swiftconstvalues",
+    "dependencies" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/HerdrMobile-primary.d",
+    "diagnostics" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/HerdrMobile-primary.dia",
+    "emit-module-dependencies" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/HerdrMobile-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/HerdrMobile-primary-emit-module.dia",
+    "pch" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/HerdrMobile-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/HerdrMobile-primary.swiftdeps"
+  },
+  "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/HerdrMobile/ANSIStripper.swift" : {
+    "index-unit-output-path" : "/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/ANSIStripper.o",
+    "llvm-bc" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/ANSIStripper.bc",
+    "object" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/ANSIStripper.o"
+  },
+  "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/HerdrMobile/AgentDetailView.swift" : {
+    "index-unit-output-path" : "/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/AgentDetailView.o",
+    "llvm-bc" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/AgentDetailView.bc",
+    "object" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/AgentDetailView.o"
+  },
+  "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/HerdrMobile/HerdrClient.swift" : {
+    "index-unit-output-path" : "/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/HerdrClient.o",
+    "llvm-bc" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/HerdrClient.bc",
+    "object" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/HerdrClient.o"
+  },
+  "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/HerdrMobile/HerdrMobileApp.swift" : {
+    "index-unit-output-path" : "/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/HerdrMobileApp.o",
+    "llvm-bc" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/HerdrMobileApp.bc",
+    "object" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/HerdrMobileApp.o"
+  },
+  "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/HerdrMobile/HomeView.swift" : {
+    "index-unit-output-path" : "/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/HomeView.o",
+    "llvm-bc" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/HomeView.bc",
+    "object" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/HomeView.o"
+  },
+  "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/HerdrMobile/Models.swift" : {
+    "index-unit-output-path" : "/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/Models.o",
+    "llvm-bc" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/Models.bc",
+    "object" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/Models.o"
+  },
+  "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/HerdrMobile/PaneView.swift" : {
+    "index-unit-output-path" : "/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/PaneView.o",
+    "llvm-bc" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/PaneView.bc",
+    "object" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/PaneView.o"
+  },
+  "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/HerdrMobile/SessionController.swift" : {
+    "index-unit-output-path" : "/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/SessionController.o",
+    "llvm-bc" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/SessionController.bc",
+    "object" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/SessionController.o"
+  },
+  "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/HerdrMobile/SettingsStore.swift" : {
+    "index-unit-output-path" : "/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/SettingsStore.o",
+    "llvm-bc" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/SettingsStore.bc",
+    "object" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/SettingsStore.o"
+  },
+  "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/HerdrMobile/SettingsView.swift" : {
+    "index-unit-output-path" : "/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/SettingsView.o",
+    "llvm-bc" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/SettingsView.bc",
+    "object" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/SettingsView.o"
+  },
+  "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/HerdrMobile/SharedViews.swift" : {
+    "index-unit-output-path" : "/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/SharedViews.o",
+    "llvm-bc" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/SharedViews.bc",
+    "object" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/SharedViews.o"
+  },
+  "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/HerdrMobile/Theme.swift" : {
+    "index-unit-output-path" : "/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/Theme.o",
+    "llvm-bc" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/Theme.bc",
+    "object" : "/Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/build/HerdrMobile.build/Release-iphonesimulator/HerdrMobile.build/Objects-normal/arm64/Theme.o"
+  }
+}
