@@ -1,10 +1,11 @@
 import type { Server, ServerWebSocket } from "bun";
 import type { HerdrCli } from "./cli";
-import { CliError, isUnknownTarget } from "./cli";
+import { assertSafePositional, CliError, isUnknownTarget } from "./cli";
 import type { StateEngine } from "./engine";
 import type { Snapshot } from "./types";
 
 interface PaneWatch {
+  generation: number;
   paneId: string;
   lines: number;
   lastText?: string;
@@ -12,8 +13,17 @@ interface PaneWatch {
 
 interface WebSocketData {
   watch: PaneWatch | null;
-  timer?: ReturnType<typeof setInterval>;
+  timer?: ReturnType<typeof setTimeout>;
+  generation: number;
+  readQueue: Promise<void>;
+  closed: boolean;
 }
+
+export const MAX_REQUEST_BODY_BYTES = 64 * 1024;
+export const MAX_PROMPT_TEXT_LENGTH = 16_000;
+export const MAX_KEYS_COUNT = 32;
+export const MAX_KEY_LENGTH = 128;
+export const MAX_OUTPUT_LINES = 2_000;
 
 function json(value: unknown, status = 200): Response {
   return Response.json(value, { status });
@@ -34,21 +44,94 @@ function decodePathPart(value: string): string {
   }
 }
 
-function parseLines(value: string | null, defaultValue: number): number {
-  if (value === null) return defaultValue;
-  const lines = Number(value);
-  if (!Number.isSafeInteger(lines) || lines < 1) {
-    throw new TypeError("lines must be a positive integer");
+function parseLines(value: unknown, defaultValue: number): number {
+  if (value === null || value === undefined) return defaultValue;
+  const lines = typeof value === "number"
+    ? value
+    : typeof value === "string" && /^\d+$/.test(value)
+      ? Number(value)
+      : Number.NaN;
+  if (!Number.isSafeInteger(lines) || lines < 1 || lines > MAX_OUTPUT_LINES) {
+    throw new TypeError(`lines must be an integer between 1 and ${MAX_OUTPUT_LINES}`);
   }
   return lines;
 }
 
 async function readJsonBody(request: Request): Promise<unknown> {
+  const contentLength = request.headers.get("content-length");
+  if (contentLength !== null) {
+    const declaredBytes = Number(contentLength);
+    if (!Number.isSafeInteger(declaredBytes) || declaredBytes < 0) {
+      throw new TypeError("Content-Length must be a non-negative integer");
+    }
+    if (declaredBytes > MAX_REQUEST_BODY_BYTES) {
+      throw new TypeError(`Request body must not exceed ${MAX_REQUEST_BODY_BYTES} bytes`);
+    }
+  }
+
+  if (!request.body) throw new TypeError("Request body must be valid JSON");
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    totalBytes += value.byteLength;
+    if (totalBytes > MAX_REQUEST_BODY_BYTES) {
+      await reader.cancel().catch(() => undefined);
+      throw new TypeError(`Request body must not exceed ${MAX_REQUEST_BODY_BYTES} bytes`);
+    }
+    chunks.push(value);
+  }
+
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
   try {
-    return await request.json();
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return JSON.parse(text) as unknown;
   } catch {
     throw new TypeError("Request body must be valid JSON");
   }
+}
+
+function validatePromptText(text: string): void {
+  if (text.length > MAX_PROMPT_TEXT_LENGTH) {
+    throw new TypeError(`text must not exceed ${MAX_PROMPT_TEXT_LENGTH} characters`);
+  }
+  assertSafePositional(text, "text");
+}
+
+function validateKeys(keys: string[]): void {
+  if (keys.length > MAX_KEYS_COUNT) {
+    throw new TypeError(`keys must contain at most ${MAX_KEYS_COUNT} elements`);
+  }
+  for (const key of keys) {
+    if (key.length > MAX_KEY_LENGTH) {
+      throw new TypeError(`each key must not exceed ${MAX_KEY_LENGTH} characters`);
+    }
+    assertSafePositional(key, "key");
+  }
+}
+
+export function isSafeTailscaleIpv4(value: string): boolean {
+  const parts = value.split(".");
+  if (parts.length !== 4 || parts.some((part) => !/^\d{1,3}$/.test(part))) return false;
+  const octets = parts.map(Number);
+  if (octets.some((octet) => octet > 255)) return false;
+  if (octets.every((octet) => octet === 0)) return false;
+  if (octets.every((octet) => octet === 255)) return false;
+  return octets[0]! < 224 || octets[0]! > 239;
+}
+
+function isWildcardHost(host: string): boolean {
+  const normalized = host.trim().toLowerCase();
+  return normalized === "" || normalized === "*" || normalized === "0.0.0.0" ||
+    normalized === "::" || normalized === "[::]" || normalized === "0:0:0:0:0:0:0:0";
 }
 
 async function handleHttp(request: Request, engine: StateEngine, cli: HerdrCli): Promise<Response> {
@@ -70,6 +153,7 @@ async function handleHttp(request: Request, engine: StateEngine, cli: HerdrCli):
   if (request.method === "GET" && outputMatch) {
     try {
       const paneId = decodePathPart(outputMatch[1]!);
+      assertSafePositional(paneId, "paneId");
       const lines = parseLines(url.searchParams.get("lines"), 200);
       const format = url.searchParams.get("format") ?? "text";
       if (format !== "text" && format !== "ansi") {
@@ -97,11 +181,14 @@ async function handleHttp(request: Request, engine: StateEngine, cli: HerdrCli):
   if (request.method === "POST" && promptMatch) {
     try {
       const target = decodePathPart(promptMatch[1]!);
+      assertSafePositional(target, "target");
       const body = await readJsonBody(request);
       if (!body || typeof body !== "object" || typeof (body as { text?: unknown }).text !== "string") {
         return json({ ok: false, error: "text must be a string" }, 400);
       }
-      await cli.text(["agent", "prompt", target, (body as { text: string }).text]);
+      const text = (body as { text: string }).text;
+      validatePromptText(text);
+      await cli.text(["agent", "prompt", target, text]);
       return json({ ok: true });
     } catch (error) {
       if (error instanceof TypeError) return json({ ok: false, error: error.message }, 400);
@@ -113,11 +200,13 @@ async function handleHttp(request: Request, engine: StateEngine, cli: HerdrCli):
   if (request.method === "POST" && keysMatch) {
     try {
       const target = decodePathPart(keysMatch[1]!);
+      assertSafePositional(target, "target");
       const body = await readJsonBody(request);
       const keys = body && typeof body === "object" ? (body as { keys?: unknown }).keys : undefined;
       if (!Array.isArray(keys) || keys.length === 0 || !keys.every((key) => typeof key === "string")) {
         return json({ ok: false, error: "keys must be a non-empty string array" }, 400);
       }
+      validateKeys(keys);
       await cli.text(["agent", "send-keys", target, ...keys]);
       return json({ ok: true });
     } catch (error) {
@@ -142,12 +231,32 @@ export function startSidecar(options: {
   outputIntervalMs?: number;
   pingIntervalMs?: number;
 }): RunningSidecar {
+  const uniqueHosts = [...new Set(options.hosts)];
+  const wildcardHost = uniqueHosts.find(isWildcardHost);
+  if (wildcardHost !== undefined) {
+    throw new TypeError(`Refusing to bind unauthenticated sidecar to wildcard host '${wildcardHost}'`);
+  }
+
   const clients = new Set<ServerWebSocket<WebSocketData>>();
   const outputIntervalMs = options.outputIntervalMs ?? 2_000;
 
-  const pushOutput = async (ws: ServerWebSocket<WebSocketData>, force: boolean): Promise<void> => {
-    const watch = ws.data.watch;
-    if (!watch) return;
+  const isCurrentWatch = (ws: ServerWebSocket<WebSocketData>, watch: PaneWatch): boolean =>
+    !ws.data.closed && ws.data.watch?.generation === watch.generation;
+
+  const clearWatch = (ws: ServerWebSocket<WebSocketData>, closed = false): void => {
+    ws.data.generation += 1;
+    if (ws.data.timer) clearTimeout(ws.data.timer);
+    ws.data.timer = undefined;
+    ws.data.watch = null;
+    if (closed) ws.data.closed = true;
+  };
+
+  const pushOutput = async (
+    ws: ServerWebSocket<WebSocketData>,
+    watch: PaneWatch,
+    force: boolean,
+  ): Promise<void> => {
+    if (!isCurrentWatch(ws, watch)) return;
     try {
       const text = await options.cli.text([
         "pane",
@@ -160,14 +269,37 @@ export function startSidecar(options: {
         "--format",
         "text",
       ]);
+      if (!isCurrentWatch(ws, watch)) return;
       if (force || text !== watch.lastText) {
         watch.lastText = text;
         ws.send(JSON.stringify({ type: "output", paneId: watch.paneId, text, format: "text" }));
       }
     } catch (error) {
+      if (!isCurrentWatch(ws, watch)) return;
       const message = error instanceof Error ? error.message : String(error);
       ws.send(JSON.stringify({ type: "error", message }));
+    } finally {
+      if (isCurrentWatch(ws, watch)) {
+        ws.data.timer = setTimeout(() => {
+          ws.data.timer = undefined;
+          queueOutput(ws, watch, false);
+        }, outputIntervalMs);
+      }
     }
+  };
+
+  const queueOutput = (
+    ws: ServerWebSocket<WebSocketData>,
+    watch: PaneWatch,
+    force: boolean,
+  ): void => {
+    const run = () => pushOutput(ws, watch, force);
+    ws.data.readQueue = ws.data.readQueue.then(run, run);
+  };
+
+  const sendWsError = (ws: ServerWebSocket<WebSocketData>, error: unknown): void => {
+    const message = error instanceof Error ? error.message : String(error);
+    ws.send(JSON.stringify({ type: "error", message }));
   };
 
   const websocket = {
@@ -176,55 +308,55 @@ export function startSidecar(options: {
       ws.send(JSON.stringify({ type: "state", state: options.engine.snapshot }));
     },
     message(ws: ServerWebSocket<WebSocketData>, raw: string | Buffer) {
-      void (async () => {
-        let message: unknown;
-        try {
-          message = JSON.parse(typeof raw === "string" ? raw : raw.toString());
-        } catch {
-          ws.send(JSON.stringify({ type: "error", message: "Message must be valid JSON" }));
-          return;
-        }
+      let message: unknown;
+      try {
+        message = JSON.parse(typeof raw === "string" ? raw : raw.toString());
+      } catch {
+        sendWsError(ws, "Message must be valid JSON");
+        return;
+      }
 
-        if (!message || typeof message !== "object") {
-          ws.send(JSON.stringify({ type: "error", message: "Message must be an object" }));
-          return;
-        }
+      if (!message || typeof message !== "object") {
+        sendWsError(ws, "Message must be an object");
+        return;
+      }
 
-        const value = message as { type?: unknown; paneId?: unknown; lines?: unknown };
-        if (value.type === "unwatch") {
-          if (ws.data.timer) clearInterval(ws.data.timer);
-          ws.data.timer = undefined;
-          ws.data.watch = null;
-          return;
-        }
-        if (value.type !== "watch") {
-          ws.send(JSON.stringify({ type: "error", message: "Unknown message type" }));
-          return;
-        }
+      const value = message as { type?: unknown; paneId?: unknown; lines?: unknown };
+      if (value.type === "unwatch") {
+        clearWatch(ws);
+        return;
+      }
+      if (value.type !== "watch") {
+        sendWsError(ws, "Unknown message type");
+        return;
+      }
+
+      try {
         if (typeof value.paneId !== "string" || value.paneId.length === 0) {
-          ws.send(JSON.stringify({ type: "error", message: "paneId must be a non-empty string" }));
-          return;
+          throw new TypeError("paneId must be a non-empty string");
         }
-        const lines = value.lines === undefined ? 200 : Number(value.lines);
-        if (!Number.isSafeInteger(lines) || lines < 1) {
-          ws.send(JSON.stringify({ type: "error", message: "lines must be a positive integer" }));
-          return;
-        }
-
-        if (ws.data.timer) clearInterval(ws.data.timer);
-        ws.data.watch = { paneId: value.paneId, lines };
-        await pushOutput(ws, true);
-        ws.data.timer = setInterval(() => void pushOutput(ws, false), outputIntervalMs);
-      })();
+        assertSafePositional(value.paneId, "paneId");
+        const lines = parseLines(value.lines, 200);
+        clearWatch(ws);
+        const watch: PaneWatch = {
+          generation: ws.data.generation,
+          paneId: value.paneId,
+          lines,
+        };
+        ws.data.watch = watch;
+        queueOutput(ws, watch, true);
+      } catch (error) {
+        sendWsError(ws, error);
+      }
     },
     close(ws: ServerWebSocket<WebSocketData>) {
       clients.delete(ws);
-      if (ws.data.timer) clearInterval(ws.data.timer);
+      clearWatch(ws, true);
     },
   };
 
   const servers: Server<WebSocketData>[] = [];
-  for (const host of [...new Set(options.hosts)]) {
+  for (const host of uniqueHosts) {
     try {
       const server = Bun.serve<WebSocketData>({
         hostname: host,
@@ -237,7 +369,14 @@ export function startSidecar(options: {
             return json({ ok: false, error: "Invalid request URL" }, 400);
           }
           if (request.method === "GET" && url.pathname === "/ws") {
-            return server.upgrade(request, { data: { watch: null } })
+            return server.upgrade(request, {
+              data: {
+                watch: null,
+                generation: 0,
+                readQueue: Promise.resolve(),
+                closed: false,
+              },
+            })
               ? undefined
               : json({ ok: false, error: "WebSocket upgrade failed" }, 400);
           }
@@ -266,7 +405,11 @@ export function startSidecar(options: {
     stop() {
       unsubscribe();
       clearInterval(pingTimer);
-      for (const client of clients) client.close();
+      for (const client of clients) {
+        clearWatch(client, true);
+        client.close();
+      }
+      clients.clear();
       for (const server of servers) server.stop(true);
     },
   };

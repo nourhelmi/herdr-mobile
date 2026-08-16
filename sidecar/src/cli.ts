@@ -15,6 +15,12 @@ export interface HerdrCli {
   text(args: string[]): Promise<string>;
 }
 
+export function assertSafePositional(value: string, name: string): void {
+  if (value.startsWith("-")) {
+    throw new TypeError(`${name} must not start with '-'`);
+  }
+}
+
 export class ProcessHerdrCli implements HerdrCli {
   async text(args: string[]): Promise<string> {
     const child = spawn(["herdr", ...args], {

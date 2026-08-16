@@ -1,12 +1,12 @@
 import { resolve } from "node:path";
-import { ProcessHerdrCli } from "./cli";
+import { assertSafePositional, ProcessHerdrCli } from "./cli";
 import { StateEngine } from "./engine";
 import {
   loadNotificationTracker,
   loadOrCreateTopic,
   NotificationWatcher,
 } from "./notifier";
-import { startSidecar } from "./server";
+import { isSafeTailscaleIpv4, startSidecar } from "./server";
 
 async function detectTailscaleIpv4(): Promise<string | null> {
   try {
@@ -20,7 +20,7 @@ async function detectTailscaleIpv4(): Promise<string | null> {
     ]);
     if (exitCode !== 0) return null;
     const address = output.trim().split(/\s+/)[0];
-    return address && /^\d{1,3}(?:\.\d{1,3}){3}$/.test(address) ? address : null;
+    return address && isSafeTailscaleIpv4(address) ? address : null;
   } catch {
     return null;
   }
@@ -38,8 +38,9 @@ const notifications = new NotificationWatcher(
   tracker,
   notificationStatePath,
   topic,
-  (paneId, lines) =>
-    cli.text([
+  (paneId, lines) => {
+    assertSafePositional(paneId, "paneId");
+    return cli.text([
       "pane",
       "read",
       paneId,
@@ -49,7 +50,8 @@ const notifications = new NotificationWatcher(
       String(lines),
       "--format",
       "text",
-    ]),
+    ]);
+  },
 );
 const engine = new StateEngine(cli, notifications);
 await engine.start();

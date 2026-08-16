@@ -23,6 +23,10 @@ On startup it prints the generated ntfy topic. Runtime state is stored under `si
 
 See the authoritative table in [`PROTOCOL.md`](../PROTOCOL.md#http-api). Herdr commands are spawned with argv arrays; request values are never interpolated into a shell command.
 
+Input limits are enforced before invoking Herdr: JSON request bodies are capped at 64 KiB, prompt text at 16,000 characters, key arrays at 32 entries with 128 characters per key, and pane output at 2,000 lines for both HTTP and WebSocket requests. Limit violations return HTTP 400 or a WebSocket `error` frame.
+
+Herdr 0.8.0 does not honor `--` as an option delimiter for `pane read`, `agent prompt`, or `agent send-keys`. The sidecar therefore rejects pane IDs, agent targets, prompt text, and key names beginning with `-` rather than allowing them to be parsed as CLI flags.
+
 ## WebSocket
 
 Connect with `GET /ws`. Actions remain HTTP-only.
