@@ -38,6 +38,7 @@ export class StateEngine {
 
   async start(): Promise<void> {
     await this.poll(true);
+    if (!this.current) throw new Error("Initial Herdr state poll failed");
     this.timers.push(setInterval(() => void this.poll(false), this.agentIntervalMs));
     this.timers.push(setInterval(() => void this.poll(true), this.structureIntervalMs));
   }
