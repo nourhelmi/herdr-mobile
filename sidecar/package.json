@@ -1,0 +1,13 @@
+{
+  "name": "herdr-mobile-sidecar",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14"
+  }
+}
