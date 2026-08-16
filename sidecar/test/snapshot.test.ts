@@ -16,13 +16,13 @@ async function fixtureInput() {
     fixture<{ result: { agents: RawAgent[] } }>("agents.json"),
     fixture<{ result: { workspaces: RawWorkspace[] } }>("workspaces.json"),
     fixture<{ result: { tabs: RawTab[] } }>("tabs.json"),
-    fixture<{ panes: RawPane[] }>("panes.json"),
+    fixture<{ result: { panes: RawPane[] } }>("panes.json"),
   ]);
   return {
     agents: agentEnvelope.result.agents,
     workspaces: workspaceEnvelope.result.workspaces,
     tabs: tabEnvelope.result.tabs,
-    panes: paneFixture.panes,
+    panes: paneFixture.result.panes,
   };
 }
 
