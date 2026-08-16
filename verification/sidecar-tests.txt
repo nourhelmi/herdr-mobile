@@ -17,4 +17,3 @@ Ran 6 tests across 2 files. [25.00ms]
 Bundled 6 modules in 4ms
 
   index.js  19.99 KB  (entry point)
-

@@ -3,7 +3,7 @@
 Topic: `5ad30ae76a5541f8a7d00fe75804cad16a2f0202a3fb4bbfb3650e87616203ba`
 
 ```http
-HTTP/2 200 
+HTTP/2 200
 server: nginx
 date: Sun, 16 Aug 2026 21:03:36 GMT
 content-type: application/json
