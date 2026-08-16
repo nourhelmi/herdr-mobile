@@ -1,4 +1,4 @@
-import type { HerdrCli } from "./cli";
+import { assertSafePositional, type HerdrCli } from "./cli";
 import type { NotificationWatcher } from "./notifier";
 import { agentSetAndStateSignature, buildSnapshot, diffSnapshots } from "./snapshot";
 import type { RawAgent, RawPane, RawTab, RawWorkspace, Snapshot } from "./types";
@@ -93,9 +93,16 @@ export class StateEngine {
     ]);
     const workspaces = workspaceResult.workspaces ?? [];
     const paneResults = await Promise.all(
-      workspaces.map((workspace) =>
-        this.cli.json<{ panes: RawPane[] }>(["pane", "list", "--workspace", workspace.workspace_id]),
-      ),
+      workspaces.map(async (workspace) => {
+        // Flag-like IDs from CLI output must not become argv; skip that workspace and keep polling.
+        try {
+          assertSafePositional(workspace.workspace_id, "workspace_id");
+        } catch (error) {
+          console.error("Skipping workspace with unsafe workspace_id:", workspace.workspace_id, error);
+          return { panes: [] as RawPane[] };
+        }
+        return this.cli.json<{ panes: RawPane[] }>(["pane", "list", "--workspace", workspace.workspace_id]);
+      }),
     );
 
     this.workspaces = workspaces;

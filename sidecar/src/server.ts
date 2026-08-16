@@ -118,20 +118,18 @@ function validateKeys(keys: string[]): void {
   }
 }
 
+/** Exact 127.0.0.1 or numerically-parsed unicast IPv4. Rejects wildcards, multicast, class-E, IPv6. */
 export function isSafeTailscaleIpv4(value: string): boolean {
+  if (value === "127.0.0.1") return true;
   const parts = value.split(".");
   if (parts.length !== 4 || parts.some((part) => !/^\d{1,3}$/.test(part))) return false;
   const octets = parts.map(Number);
-  if (octets.some((octet) => octet > 255)) return false;
-  if (octets.every((octet) => octet === 0)) return false;
-  if (octets.every((octet) => octet === 255)) return false;
-  return octets[0]! < 224 || octets[0]! > 239;
-}
-
-function isWildcardHost(host: string): boolean {
-  const normalized = host.trim().toLowerCase();
-  return normalized === "" || normalized === "*" || normalized === "0.0.0.0" ||
-    normalized === "::" || normalized === "[::]" || normalized === "0:0:0:0:0:0:0:0";
+  if (octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) return false;
+  const [a, b, c, d] = octets;
+  if (a === 0 && b === 0 && c === 0 && d === 0) return false;
+  if (a === 255 && b === 255 && c === 255 && d === 255) return false;
+  if (a >= 224) return false;
+  return true;
 }
 
 async function handleHttp(request: Request, engine: StateEngine, cli: HerdrCli): Promise<Response> {
@@ -232,9 +230,9 @@ export function startSidecar(options: {
   pingIntervalMs?: number;
 }): RunningSidecar {
   const uniqueHosts = [...new Set(options.hosts)];
-  const wildcardHost = uniqueHosts.find(isWildcardHost);
-  if (wildcardHost !== undefined) {
-    throw new TypeError(`Refusing to bind unauthenticated sidecar to wildcard host '${wildcardHost}'`);
+  const unsafeHost = uniqueHosts.find((host) => !isSafeTailscaleIpv4(host));
+  if (unsafeHost !== undefined) {
+    throw new TypeError(`Refusing to bind unauthenticated sidecar to host '${unsafeHost}'`);
   }
 
   const clients = new Set<ServerWebSocket<WebSocketData>>();

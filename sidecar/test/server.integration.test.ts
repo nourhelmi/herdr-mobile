@@ -351,4 +351,44 @@ describe("binding validation", () => {
       }),
     ).toThrow("Refusing to bind");
   });
+
+  test("rejects wildcard aliases, multicast, class-E, and IPv6; accepts loopback and unicast IPv4", () => {
+    const cli = new FakeCli();
+    const engine = new FakeEngine();
+    const rejected = ["::0", "000.000.000.000", "0.0.0.0", "240.0.0.1", "224.0.0.1", "255.255.255.255"];
+    for (const host of rejected) {
+      expect(isSafeTailscaleIpv4(host)).toBe(false);
+      expect(() =>
+        startSidecar({
+          engine: engine as unknown as StateEngine,
+          cli,
+          hosts: [host],
+          port: 0,
+        }),
+      ).toThrow("Refusing to bind");
+    }
+
+    expect(isSafeTailscaleIpv4("127.0.0.1")).toBe(true);
+    expect(isSafeTailscaleIpv4("100.115.104.23")).toBe(true);
+
+    const loopback = startSidecar({
+      engine: engine as unknown as StateEngine,
+      cli,
+      hosts: ["127.0.0.1"],
+      port: 0,
+    });
+    running.push(loopback);
+    expect(loopback.servers.length).toBeGreaterThan(0);
+
+    expect(() => {
+      running.push(
+        startSidecar({
+          engine: engine as unknown as StateEngine,
+          cli,
+          hosts: ["100.115.104.23"],
+          port: 0,
+        }),
+      );
+    }).not.toThrow();
+  });
 });
