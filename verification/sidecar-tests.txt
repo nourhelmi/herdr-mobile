@@ -1,0 +1,20 @@
+bun test v1.3.14 (0d9b296a)
+
+test/snapshot.test.ts:
+(pass) buildSnapshot > builds the frozen workspace tree from real Herdr fixtures [1.77ms]
+(pass) diffSnapshots > ignores generatedAt-only changes and reports pane-keyed state transitions [0.80ms]
+(pass) diffSnapshots > agent-set signature is stable across CLI ordering [0.25ms]
+
+test/notifier.test.ts:
+(pass) NotificationTracker > notifies transitions into blocked/done and debounces pane+state for 60 seconds [0.23ms]
+(pass) NotificationTracker > treats a first blocked observation as a restart baseline [0.02ms]
+(pass) NotificationWatcher persistence > persists last-seen state so restart does not re-notify [2.77ms]
+
+ 6 pass
+ 0 fail
+ 24 expect() calls
+Ran 6 tests across 2 files. [25.00ms]
+Bundled 6 modules in 4ms
+
+  index.js  19.99 KB  (entry point)
+

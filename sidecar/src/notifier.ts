@@ -28,7 +28,8 @@ export class NotificationTracker {
       if (agent.state !== "blocked" && agent.state !== "done") continue;
 
       const key = `${agent.paneId}:${agent.state}`;
-      if (now - (this.data.notifiedAt[key] ?? 0) < this.debounceMs) continue;
+      const lastNotifiedAt = this.data.notifiedAt[key];
+      if (lastNotifiedAt !== undefined && now - lastNotifiedAt < this.debounceMs) continue;
       this.data.notifiedAt[key] = now;
       decisions.push({ agent, state: agent.state });
     }

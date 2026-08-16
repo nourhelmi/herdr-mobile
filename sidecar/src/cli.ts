@@ -1,3 +1,5 @@
+import { spawn } from "bun";
+
 export class CliError extends Error {
   constructor(
     message: string,
@@ -15,14 +17,14 @@ export interface HerdrCli {
 
 export class ProcessHerdrCli implements HerdrCli {
   async text(args: string[]): Promise<string> {
-    const process = Bun.spawn(["herdr", ...args], {
+    const child = spawn(["herdr", ...args], {
       stdout: "pipe",
       stderr: "pipe",
     });
     const [stdout, stderr, exitCode] = await Promise.all([
-      new Response(process.stdout).text(),
-      new Response(process.stderr).text(),
-      process.exited,
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
     ]);
 
     if (exitCode !== 0) {
