@@ -111,6 +111,10 @@ final class HerdrClient {
         try await post(path: "/workspace/\(Self.encodePath(workspaceId))/tab", body: body)
     }
 
+    func acknowledge(target: String) async throws {
+        try await post(path: "/agent/\(Self.encodePath(target))/acknowledge")
+    }
+
     /// Protocol: `:` in pane ids must be `%3A`.
     static func encodePath(_ value: String) -> String {
         var allowed = CharacterSet.alphanumerics
@@ -222,6 +226,13 @@ final class HerdrClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let _: OKResponse = try await send(request)
+    }
+
+    /// Bodyless POST: no Content-Type and no `{}`.
+    private func post(path: String) async throws {
+        var request = try makeRequest(path: path)
+        request.httpMethod = "POST"
         let _: OKResponse = try await send(request)
     }
 

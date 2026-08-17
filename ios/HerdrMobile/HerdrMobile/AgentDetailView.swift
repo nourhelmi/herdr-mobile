@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 private enum AgentViewMode: String, CaseIterable {
     case prompt
@@ -18,6 +19,8 @@ struct AgentDetailView: View {
     @State private var terminalWriteTask: Task<Void, Never>?
     @State private var isSending = false
     @State private var actionError: String?
+    @State private var isAcknowledging = false
+    @State private var acknowledgementMessage: String?
 
     private var live: AgentSnapshot {
         session.snapshot?.agents.first { $0.paneId == agent.paneId } ?? agent
@@ -49,6 +52,8 @@ struct AgentDetailView: View {
                         isSending: isSending,
                         placeholder: "Type into the pane",
                         sendLabel: "RET",
+                        fieldAccessibilityLabel: "Terminal input",
+                        sendAccessibilityLabel: "Send enter",
                         onSend: { Task { await handleKey("enter") } }
                     )
                     .onChange(of: terminalBuffer) { _, newValue in
@@ -76,6 +81,11 @@ struct AgentDetailView: View {
         .toolbarBackground(HerdrInk.void, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .onAppear { session.watch(paneId: live.paneId) }
+        .onChange(of: live.state) { _, newState in
+            if newState != "done" {
+                acknowledgementMessage = nil
+            }
+        }
         .onDisappear {
             inputTask?.cancel()
             terminalWriteTask?.cancel()
@@ -103,9 +113,48 @@ struct AgentDetailView: View {
                     .font(HerdrType.meta)
                     .foregroundStyle(HerdrInk.mute)
             }
+            if live.state == "done" {
+                acknowledgeControl
+            }
         }
         .padding(12)
         .background(HerdrInk.panel)
+    }
+
+    private var acknowledgeControl: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                Task { await acknowledge() }
+            } label: {
+                Label("Acknowledge", systemImage: "checkmark.circle")
+                    .font(HerdrType.key)
+                    .foregroundStyle(isAcknowledging ? HerdrInk.mute : HerdrInk.void)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(isAcknowledging ? HerdrInk.rule : HerdrInk.tide, in: Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(isAcknowledging)
+            .accessibilityHint("Marks this done agent as seen")
+            .accessibilityLabel(isAcknowledging ? "Acknowledging agent" : "Acknowledge")
+            .accessibilityValue(isAcknowledging ? "In progress" : "")
+
+            if isAcknowledging {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .tint(HerdrInk.tide)
+                    Text("Acknowledging…")
+                        .font(HerdrType.meta)
+                        .foregroundStyle(HerdrInk.paper)
+                }
+                .accessibilityHidden(true)
+            } else if acknowledgementMessage != nil {
+                Text("Acknowledged")
+                    .font(HerdrType.meta)
+                    .foregroundStyle(HerdrInk.tide)
+            }
+        }
     }
 
     private var chipRow: some View {
@@ -162,6 +211,29 @@ struct AgentDetailView: View {
         .buttonStyle(.plain)
         .accessibilityLabel(value == .prompt ? "Prompt mode" : "Terminal mode")
         .accessibilityAddTraits(mode == value ? .isSelected : [])
+    }
+
+    private func acknowledge() async {
+        guard !isAcknowledging else { return }
+        let target = live.paneId
+        isAcknowledging = true
+        acknowledgementMessage = nil
+        announce("Acknowledging agent")
+        defer { isAcknowledging = false }
+        do {
+            try await session.acknowledge(target: target)
+            actionError = nil
+            acknowledgementMessage = "Acknowledged"
+            announce("Acknowledged")
+        } catch {
+            acknowledgementMessage = nil
+            actionError = error.localizedDescription
+            announce("Error, \(error.localizedDescription)")
+        }
+    }
+
+    private func announce(_ message: String) {
+        UIAccessibility.post(notification: .announcement, argument: message)
     }
 
     private func submitPrompt() {

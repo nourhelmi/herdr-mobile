@@ -210,6 +210,8 @@ struct PromptComposer: View {
     var isSending: Bool
     var placeholder = "Prompt the agent"
     var sendLabel = "SEND"
+    var fieldAccessibilityLabel = "Prompt"
+    var sendAccessibilityLabel = "Send prompt"
     var onSend: () -> Void
 
     var body: some View {
@@ -224,7 +226,7 @@ struct PromptComposer: View {
                 .overlay(Rectangle().stroke(HerdrInk.rule, lineWidth: 1))
                 .submitLabel(.send)
                 .onSubmit(onSend)
-                .accessibilityLabel("Prompt")
+                .accessibilityLabel(fieldAccessibilityLabel)
             Button(action: onSend) {
                 Text(isSending ? "…" : sendLabel)
                     .font(HerdrType.key)
@@ -235,7 +237,7 @@ struct PromptComposer: View {
             }
             .buttonStyle(.plain)
             .disabled(!canSend)
-            .accessibilityLabel("Send prompt")
+            .accessibilityLabel(sendAccessibilityLabel)
         }
     }
 

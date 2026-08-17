@@ -21,7 +21,9 @@ On startup it prints the generated ntfy topic. Runtime state is stored under `si
 
 ## HTTP
 
-See the authoritative table in [`PROTOCOL.md`](../PROTOCOL.md#http-api). Herdr commands are spawned with argv arrays; request values are never interpolated into a shell command.
+See the frozen v1/v1.1 tables in [`PROTOCOL.md`](../PROTOCOL.md#http-api) and the [v2 addendum](../PROTOCOL.md#v2-addendum). Herdr commands are spawned with argv arrays; request values are never interpolated into a shell command.
+
+`POST /agent/:target/acknowledge` is bodyless and wraps only `herdr agent focus <target>`. A 2xx response means that argv call and a sidecar agent poll both completed; clients then fetch `/state`. A successful mutation whose poll fails returns 502 and must be refreshed before retrying. Workspace and tab creation use the same freshness rule with a structure poll.
 
 Input limits are enforced before invoking Herdr: JSON request bodies are capped at 64 KiB, prompt text at 16,000 characters, key arrays at 32 entries with 128 characters per key, and pane output at 2,000 lines for both HTTP and WebSocket requests. Limit violations return HTTP 400 or a WebSocket `error` frame.
 

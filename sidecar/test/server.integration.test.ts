@@ -23,11 +23,18 @@ const snapshot: Snapshot = {
 class FakeEngine {
   herdrOk = true;
   snapshot = snapshot;
+  pollCalls: boolean[] = [];
+  pollResult = true;
   private listeners = new Set<(value: Snapshot) => void>();
 
   subscribe(listener: (value: Snapshot) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  async poll(forceStructure: boolean): Promise<boolean> {
+    this.pollCalls.push(forceStructure);
+    return this.pollResult;
   }
 }
 
@@ -268,7 +275,7 @@ describe("sidecar HTTP integration", () => {
 
 describe("sidecar v1.1 HTTP integration", () => {
   test("creates a workspace and tab, and forwards raw pane text", async () => {
-    const { baseUrl, cli } = startTestServer();
+    const { baseUrl, cli, engine } = startTestServer();
 
     const workspace = await fetch(`${baseUrl}/workspace`, {
       method: "POST",
@@ -307,6 +314,25 @@ describe("sidecar v1.1 HTTP integration", () => {
       ["tab", "create", "--workspace", "w1", "--label", "server"],
       ["pane", "send-text", "w1:p1", "/model"],
     ]);
+    expect(engine.pollCalls).toEqual([true, true, true]);
+  });
+
+  test("returns route-specific 502 when workspace create succeeds but structure refresh fails", async () => {
+    const { baseUrl, cli, engine } = startTestServer();
+    engine.pollResult = false;
+
+    const workspace = await fetch(`${baseUrl}/workspace`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(workspace.status).toBe(502);
+    expect(await jsonResponse(workspace)).toEqual({
+      ok: false,
+      error: "Workspace was created, but state refresh failed; refresh before retrying",
+    });
+    expect(cli.calls).toEqual([["workspace", "create"]]);
+    expect(engine.pollCalls).toEqual([true]);
   });
 
   test("rejects flag-like and overlong labels and input before invoking Herdr", async () => {
@@ -346,6 +372,65 @@ describe("sidecar v1.1 HTTP integration", () => {
 
     for (const response of await Promise.all(requests)) expect(response.status).toBe(400);
     expect(cli.calls).toHaveLength(0);
+  });
+});
+
+describe("sidecar v2 HTTP integration", () => {
+  test("acknowledges an encoded paneId with no body, exact focus argv, and an agent poll", async () => {
+    const { baseUrl, cli, engine } = startTestServer();
+
+    const response = await fetch(`${baseUrl}/agent/w1%3Ap1/acknowledge`, { method: "POST" });
+    expect(response.status).toBe(200);
+    expect(await jsonResponse(response)).toEqual({ ok: true });
+    expect(cli.calls).toEqual([["agent", "focus", "w1:p1"]]);
+    expect(engine.pollCalls).toEqual([false]);
+  });
+
+  test("rejects encoded --help before any CLI or poll call", async () => {
+    const { baseUrl, cli, engine } = startTestServer();
+
+    const response = await fetch(`${baseUrl}/agent/${encodeURIComponent("--help")}/acknowledge`, {
+      method: "POST",
+    });
+    expect(response.status).toBe(400);
+    expect(cli.calls).toHaveLength(0);
+    expect(engine.pollCalls).toHaveLength(0);
+  });
+
+  test("maps missing acknowledge targets to 404 without polling", async () => {
+    const { baseUrl, cli, engine } = startTestServer();
+
+    const response = await fetch(`${baseUrl}/agent/missing/acknowledge`, { method: "POST" });
+    expect(response.status).toBe(404);
+    expect(await jsonResponse(response)).toEqual({ ok: false, error: "Target not found" });
+    expect(cli.calls).toEqual([["agent", "focus", "missing"]]);
+    expect(engine.pollCalls).toHaveLength(0);
+  });
+
+  test("redacts acknowledge CLI failures as 502 without polling", async () => {
+    const { baseUrl, cli, engine } = startTestServer();
+
+    const response = await fetch(`${baseUrl}/agent/failure/acknowledge`, { method: "POST" });
+    expect(response.status).toBe(502);
+    const body = await jsonResponse(response);
+    expect(body).toEqual({ ok: false, error: "Herdr command failed" });
+    expect(JSON.stringify(body).includes("top-secret")).toBe(false);
+    expect(cli.calls).toEqual([["agent", "focus", "failure"]]);
+    expect(engine.pollCalls).toHaveLength(0);
+  });
+
+  test("returns partial-success 502 when focus succeeds but the agent poll fails", async () => {
+    const { baseUrl, cli, engine } = startTestServer();
+    engine.pollResult = false;
+
+    const response = await fetch(`${baseUrl}/agent/w1%3Ap1/acknowledge`, { method: "POST" });
+    expect(response.status).toBe(502);
+    expect(await jsonResponse(response)).toEqual({
+      ok: false,
+      error: "Agent was acknowledged, but state refresh failed; refresh before retrying",
+    });
+    expect(cli.calls).toEqual([["agent", "focus", "w1:p1"]]);
+    expect(engine.pollCalls).toEqual([false]);
   });
 });
 

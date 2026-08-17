@@ -147,3 +147,31 @@ chip should prefer `display`.
 `watch` accepts optional `format`: `"text"` (v1 default) or `"ansi"`.
 Output frames echo that format. Terminal-mode clients should watch `ansi`
 and render SGR locally; Prompt mode strips + trims Pi TUI chrome on device.
+
+## v2 addendum
+
+Additive. The v1 and v1.1 tables above stay the contract.
+
+### HTTP
+
+| Method | Path | Body | Response |
+| --- | --- | --- | --- |
+| POST | `/agent/:target/acknowledge` | none | `{"ok":true}` |
+
+- Bodyless. Do not send `Content-Type` or `{}`.
+- iOS always supplies the URL-encoded `AgentSnapshot.paneId`. The sidecar
+  decodes `:target` and rejects flag-like values (400) before spawning.
+- The route wraps only argv `herdr agent focus <target>`. No shell
+  interpolation, aliases, or extra payload fields.
+- Detectable missing targets map to 404. CLI failures map to 502 with a
+  redacted `"Herdr command failed"` message.
+- 2xx means the focus command and a sidecar **agent** poll both completed.
+  Clients then fetch `/state` before showing success. `state` may remain
+  `done` because focus marks the completion seen, not a state transition.
+- If focus succeeds but the sidecar poll fails, the response is 502
+  `{"ok":false,"error":"Agent was acknowledged, but state refresh failed; refresh before retrying"}`.
+  Refresh before retrying. Do not treat this as an untouched cache.
+
+Workspace and tab creation use the same freshness rule with a **structure**
+poll and route-specific partial-success text (`Workspace was created` /
+`Tab was created`). Prompt, keys, and pane input keep periodic WS state.

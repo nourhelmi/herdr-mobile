@@ -100,12 +100,29 @@ final class SessionController {
 
     func createWorkspace(label: String?) async throws {
         try await client.createWorkspace(label: label)
-        await refresh()
+        try await refreshSnapshot(after: "Workspace was created")
     }
 
     func createTab(workspaceId: String, label: String?) async throws {
         try await client.createTab(workspaceId: workspaceId, label: label)
-        await refresh()
+        try await refreshSnapshot(after: "Tab was created")
+    }
+
+    func acknowledge(target: String) async throws {
+        try await client.acknowledge(target: target)
+        try await refreshSnapshot(after: "Agent was acknowledged")
+    }
+
+    /// Confirmed mutation already happened; a failed `/state` fetch is partial success.
+    private func refreshSnapshot(after completedAction: String) async throws {
+        do {
+            snapshot = try await client.fetchState()
+            lastError = nil
+        } catch {
+            let message = "\(completedAction), but fresh state could not be loaded; pull to refresh before retrying"
+            lastError = message
+            throw HerdrClientError(message: message)
+        }
     }
 
     func probeHealth() async throws -> HealthResponse {

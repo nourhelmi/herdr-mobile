@@ -13,7 +13,7 @@ export class StateEngine {
   private signature = "";
   private structurePolledAt = 0;
   private current: Snapshot | null = null;
-  private queue: Promise<void> = Promise.resolve();
+  private queue: Promise<boolean | void> = Promise.resolve();
   private timers: Array<ReturnType<typeof setInterval>> = [];
   private listeners = new Set<SnapshotListener>();
 
@@ -48,8 +48,8 @@ export class StateEngine {
     this.timers = [];
   }
 
-  poll(forceStructure: boolean): Promise<void> {
-    const work = async () => {
+  poll(forceStructure: boolean): Promise<boolean> {
+    const work = async (): Promise<boolean> => {
       try {
         const result = await this.cli.json<{ agents: RawAgent[] }>(["agent", "list"]);
         const nextAgents = result.agents ?? [];
@@ -76,14 +76,17 @@ export class StateEngine {
           this.current = next;
           for (const listener of this.listeners) listener(next);
         }
+        return true;
       } catch (error) {
         this.herdrOk = false;
         console.error("Herdr state poll failed:", error);
+        return false;
       }
     };
 
-    this.queue = this.queue.then(work, work);
-    return this.queue;
+    const result = this.queue.then(work, work);
+    this.queue = result;
+    return result;
   }
 
   private async refreshStructure(): Promise<void> {

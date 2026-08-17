@@ -6,6 +6,7 @@ import type { RawPane, RawTab, RawWorkspace } from "../src/types";
 
 class RecordingCli implements HerdrCli {
   readonly calls: string[][] = [];
+  failJson = false;
 
   constructor(
     private readonly workspaces: RawWorkspace[],
@@ -14,6 +15,7 @@ class RecordingCli implements HerdrCli {
 
   async json<T>(args: string[]): Promise<T> {
     this.calls.push([...args]);
+    if (this.failJson) throw new Error("cli down");
     if (args[0] === "agent" && args[1] === "list") {
       return { agents: [] } as T;
     }
@@ -51,7 +53,7 @@ describe("StateEngine positional validation", () => {
     );
     const engine = new StateEngine(cli, notifications, 60_000, 60_000);
 
-    await engine.poll(true);
+    expect(await engine.poll(true)).toBe(true);
 
     expect(engine.herdrOk).toBe(true);
     expect(cli.calls).toContainEqual(["agent", "list"]);
@@ -60,5 +62,21 @@ describe("StateEngine positional validation", () => {
     expect(cli.calls).toContainEqual(["pane", "list", "--workspace", "ws-safe"]);
     expect(cli.calls.some((args) => args.includes("--inject"))).toBe(false);
     expect(engine.snapshot.workspaces.some((workspace) => workspace.id === "ws-safe")).toBe(true);
+  });
+
+  test("successful poll resolves true; failing poll resolves false and keeps the prior snapshot", async () => {
+    const cli = new RecordingCli(
+      [{ workspace_id: "ws-safe", number: 1, focused: true }],
+      { "ws-safe": [{ pane_id: "ws-safe:p1", workspace_id: "ws-safe", tab_id: "t1" }] },
+    );
+    const engine = new StateEngine(cli, notifications, 60_000, 60_000);
+
+    expect(await engine.poll(true)).toBe(true);
+    const prior = engine.snapshot;
+
+    cli.failJson = true;
+    expect(await engine.poll(true)).toBe(false);
+    expect(engine.herdrOk).toBe(false);
+    expect(engine.snapshot).toBe(prior);
   });
 });

@@ -1,6 +1,6 @@
 # Morning verification steps
 
-This is a bounded local runbook for the v1 sidecar and simulator check. It does not upload artifacts.
+This is a bounded local runbook for the v1/v1.1 sidecar, v2 acknowledge, and simulator check. It does not upload artifacts.
 
 ## 1. Start the sidecar
 
@@ -59,6 +59,18 @@ http://127.0.0.1:8787
 
 Expected result: `ok v1.0.0 · herdr up`, then Home shows the live state. A physical device needs a reachable HTTPS/Tailscale endpoint instead of simulator host loopback.
 
-## 5. Evidence locations
+## 5. Acknowledge a done agent (v2)
+
+Bodyless POST against a real done agent's URL-encoded paneId, then fetch `/state`. Remaining `done` is acceptable when Agent Detail shows **Acknowledged**.
+
+```sh
+# Replace with a live done paneId from /state
+PANE_ID='w1:pDF'
+ENCODED=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$PANE_ID")
+curl -sS -X POST "http://127.0.0.1:8787/agent/${ENCODED}/acknowledge"
+curl -sS "http://127.0.0.1:8787/state"
+```
+
+## 6. Evidence locations
 
 Live bounded transcripts are in `verification/sidecar-http-live.md`, `verification/sidecar-ws-live.md`, and `verification/sidecar-ntfy-live.md`. Safe simulator screenshots are in `verification/screenshots/`; the run evidence manifest is stored in the assigned advisor run directory.

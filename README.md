@@ -17,6 +17,6 @@ The sidecar binds explicit loopback and, when available, Tailscale IPv4 listener
 
 Additive protocol — see the [v1.1 addendum](PROTOCOL.md#v11-addendum). Home can create a workspace; an expanded workspace can create a tab. Agent detail defaults to Prompt mode (TUI chrome trimmed, native composer, model/repo/cost chips) and can toggle Terminal mode (full ANSI pane + raw key forwarding).
 
-## v2 note
+## v2
 
-An **Acknowledge** action should call `herdr agent focus` so done-state agents are marked seen; CLI reads alone do not mark them seen.
+Agent Detail shows **Acknowledge** only while the live agent state is `done`. The action POSTs bodyless `/agent/:paneId/acknowledge`, which wraps `herdr agent focus <paneId>` so the completion is marked seen. CLI reads alone do not mark agents seen. Fresh `/state` after success may still report `done`; the visible confirmation is **Acknowledged**.

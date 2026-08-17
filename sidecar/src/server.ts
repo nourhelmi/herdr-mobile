@@ -160,6 +160,20 @@ export function isSafeTailscaleIpv4(value: string): boolean {
   return true;
 }
 
+/** Post-mutation freshness: 2xx only after poll succeeds. Partial success is 502. */
+async function refreshAfterMutation(
+  engine: StateEngine,
+  forceStructure: boolean,
+  completedAction: string,
+): Promise<Response | undefined> {
+  const refreshed = await engine.poll(forceStructure);
+  if (refreshed) return undefined;
+  return json(
+    { ok: false, error: `${completedAction}, but state refresh failed; refresh before retrying` },
+    502,
+  );
+}
+
 async function handleHttp(request: Request, engine: StateEngine, cli: HerdrCli): Promise<Response> {
   let url: URL;
   try {
@@ -200,6 +214,21 @@ async function handleHttp(request: Request, engine: StateEngine, cli: HerdrCli):
     }
   }
 
+  const acknowledgeMatch = url.pathname.match(/^\/agent\/([^/]+)\/acknowledge$/);
+  if (request.method === "POST" && acknowledgeMatch) {
+    try {
+      const target = decodePathPart(acknowledgeMatch[1]!);
+      assertSafePositional(target, "target");
+      await cli.text(["agent", "focus", target]);
+      const refreshError = await refreshAfterMutation(engine, false, "Agent was acknowledged");
+      if (refreshError) return refreshError;
+      return json({ ok: true });
+    } catch (error) {
+      if (error instanceof TypeError) return json({ ok: false, error: error.message }, 400);
+      return errorResponse(error);
+    }
+  }
+
   const promptMatch = url.pathname.match(/^\/agent\/([^/]+)\/prompt$/);
   if (request.method === "POST" && promptMatch) {
     try {
@@ -229,6 +258,8 @@ async function handleHttp(request: Request, engine: StateEngine, cli: HerdrCli):
       const args = ["workspace", "create"];
       if (label !== undefined) args.push("--label", label);
       await cli.text(args);
+      const refreshError = await refreshAfterMutation(engine, true, "Workspace was created");
+      if (refreshError) return refreshError;
       return json({ ok: true });
     } catch (error) {
       if (error instanceof TypeError) return json({ ok: false, error: error.message }, 400);
@@ -249,6 +280,8 @@ async function handleHttp(request: Request, engine: StateEngine, cli: HerdrCli):
       const args = ["tab", "create", "--workspace", workspaceId];
       if (label !== undefined) args.push("--label", label);
       await cli.text(args);
+      const refreshError = await refreshAfterMutation(engine, true, "Tab was created");
+      if (refreshError) return refreshError;
       return json({ ok: true });
     } catch (error) {
       if (error instanceof TypeError) return json({ ok: false, error: error.message }, 400);
