@@ -11,6 +11,8 @@ final class SessionController {
     var lastError: String?
     /// Mild close-lag copy. Not an error; views must not route this through ErrorBanner.
     var notice: String?
+    /// True after a 502-was-closed close: GET /state can only be the pre-close tree.
+    var structureStale = false
     var outputText = ""
     var outputPaneId: String?
     var isRefreshing = false
@@ -37,6 +39,7 @@ final class SessionController {
         client.onState = { [weak self] snapshot in
             self?.snapshot = snapshot
             self?.lastError = nil
+            self?.structureStale = false
         }
         client.onOutput = { [weak self] paneId, text in
             guard let self, self.outputPaneId == paneId else { return }
@@ -68,6 +71,8 @@ final class SessionController {
             let (healthValue, stateValue) = try await (health, state)
             herdrOK = healthValue.herdr
             snapshot = stateValue
+            structureStale = false
+            notice = nil
             lastError = healthValue.herdr ? nil : "Sidecar is up; last Herdr poll failed"
         } catch {
             lastError = error.localizedDescription
@@ -137,8 +142,9 @@ final class SessionController {
         notice = nil
     }
 
-    /// Close argv is done (2xx or sidecar 502-was-closed). Always reload `/state`.
-    /// 502-was-closed and a failed client refresh are notices, not close failures.
+    /// Close argv is done (2xx or sidecar 502-was-closed). Always GET `/state`.
+    /// 502-was-closed means the sidecar poll failed before assigning current —
+    /// the fetched tree is stale. Never claim a reload on that path.
     private func closeResource(phrase: String, op: () async throws -> Void) async throws {
         var sidecarLagged = false
         do {
@@ -147,12 +153,16 @@ final class SessionController {
             sidecarLagged = true
         }
         let clientRefreshFailed = await reloadSnapshotAfterClose()
-        if sidecarLagged || clientRefreshFailed {
-            notice = clientRefreshFailed
-                ? "\(phrase), but the tree could not be reloaded. Pull to refresh."
-                : "\(phrase). Sidecar refresh lagged; tree reloaded."
+        if sidecarLagged {
+            structureStale = true
+            notice = "\(phrase), but state refresh failed. Pull to refresh before retrying."
             return
         }
+        if clientRefreshFailed {
+            notice = "\(phrase), but the tree could not be reloaded. Pull to refresh."
+            return
+        }
+        structureStale = false
         notice = nil
     }
 

@@ -92,7 +92,8 @@ struct AgentDetailView: View {
         }
         .confirmationDialog("Close Pane?", isPresented: $showClosePane, titleVisibility: .visible) {
             Button("Close Pane", role: .destructive) {
-                Task { await closePane() }
+                let paneId = live.paneId
+                Task { await closePane(id: paneId) }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -200,12 +201,12 @@ struct AgentDetailView: View {
         }
     }
 
-    private func closePane() async {
+    private func closePane(id: String) async {
         guard !isClosing else { return }
         isClosing = true
         defer { isClosing = false }
         do {
-            try await session.closePane(id: live.paneId)
+            try await session.closePane(id: id)
             actionError = nil
             announce("Pane closed")
             dismiss()

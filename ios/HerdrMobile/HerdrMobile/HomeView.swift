@@ -173,6 +173,9 @@ struct HomeView: View {
                                         paneRow(pane)
                                     }
                                     .listRowBackground(HerdrInk.inset)
+                                    .closeActions("Close Pane…") {
+                                        pendingClose = .pane(pane)
+                                    }
                                 }
                             } label: {
                                 tabRow(tab)
@@ -378,11 +381,13 @@ struct HomeView: View {
 }
 
 private enum PendingClose: Identifiable {
+    case pane(PaneSnapshot)
     case tab(TabSnapshot)
     case workspace(WorkspaceSnapshot)
 
     var id: String {
         switch self {
+        case .pane(let pane): return "pane:\(pane.id)"
         case .tab(let tab): return "tab:\(tab.id)"
         case .workspace(let workspace): return "workspace:\(workspace.id)"
         }
@@ -392,6 +397,7 @@ private enum PendingClose: Identifiable {
 private extension HomeView {
     var pendingCloseTitle: String {
         switch pendingClose {
+        case .pane: return "Close Pane?"
         case .tab: return "Close Tab?"
         case .workspace: return "Close Workspace?"
         case nil: return "Close?"
@@ -400,6 +406,7 @@ private extension HomeView {
 
     var pendingCloseConfirmTitle: String {
         switch pendingClose {
+        case .pane: return "Close Pane"
         case .tab: return "Close Tab"
         case .workspace: return "Close Workspace"
         case nil: return "Close"
@@ -408,6 +415,8 @@ private extension HomeView {
 
     var pendingCloseMessage: String {
         switch pendingClose {
+        case .pane(let pane):
+            return CloseScopeCopy.paneMessage(title: paneTitle(pane), paneId: pane.id)
         case .tab(let tab):
             return CloseScopeCopy.tabMessage(name: tab.label, paneCount: tab.panes.count)
         case .workspace(let workspace):
@@ -428,6 +437,8 @@ private extension HomeView {
         defer { isClosing = false }
         do {
             switch pending {
+            case .pane(let pane):
+                try await session.closePane(id: pane.id)
             case .tab(let tab):
                 try await session.closeTab(id: tab.id)
             case .workspace(let workspace):

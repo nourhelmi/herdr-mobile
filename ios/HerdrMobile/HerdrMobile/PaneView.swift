@@ -2,11 +2,14 @@ import SwiftUI
 
 struct PaneView: View {
     @Environment(SessionController.self) private var session
+    @Environment(\.dismiss) private var dismiss
     let pane: PaneSnapshot
 
     @State private var prompt = ""
     @State private var isSending = false
     @State private var actionError: String?
+    @State private var showClosePane = false
+    @State private var isClosing = false
 
     private var live: PaneSnapshot {
         let tree = session.orderedWorkspaces.flatMap(\.tabs).flatMap(\.panes)
@@ -39,6 +42,28 @@ struct PaneView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(HerdrInk.void, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button("Close Pane…", role: .destructive) {
+                        showClosePane = true
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .foregroundStyle(HerdrInk.paper)
+                        .accessibilityLabel("Pane actions")
+                }
+            }
+        }
+        .confirmationDialog("Close Pane?", isPresented: $showClosePane, titleVisibility: .visible) {
+            Button("Close Pane", role: .destructive) {
+                let paneId = live.id
+                Task { await closePane(id: paneId) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(CloseScopeCopy.paneMessage(title: title, paneId: live.id))
+        }
         .onAppear { session.watch(paneId: live.id) }
         .onDisappear { session.unwatch() }
     }
@@ -104,6 +129,19 @@ struct PaneView: View {
         do {
             try await session.sendKeys(target: live.id, keys: keys)
             actionError = nil
+        } catch {
+            actionError = error.localizedDescription
+        }
+    }
+
+    private func closePane(id: String) async {
+        guard !isClosing else { return }
+        isClosing = true
+        defer { isClosing = false }
+        do {
+            try await session.closePane(id: id)
+            actionError = nil
+            dismiss()
         } catch {
             actionError = error.localizedDescription
         }
