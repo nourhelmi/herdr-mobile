@@ -328,6 +328,51 @@ async function handleHttp(request: Request, engine: StateEngine, cli: HerdrCli):
     }
   }
 
+  const paneCloseMatch = url.pathname.match(/^\/pane\/([^/]+)$/);
+  if (request.method === "DELETE" && paneCloseMatch) {
+    try {
+      const paneId = decodePathPart(paneCloseMatch[1]!);
+      assertSafePositional(paneId, "paneId");
+      await cli.text(["pane", "close", paneId]);
+      const refreshError = await refreshAfterMutation(engine, true, "Pane was closed");
+      if (refreshError) return refreshError;
+      return json({ ok: true });
+    } catch (error) {
+      if (error instanceof TypeError) return json({ ok: false, error: error.message }, 400);
+      return errorResponse(error);
+    }
+  }
+
+  const tabCloseMatch = url.pathname.match(/^\/tab\/([^/]+)$/);
+  if (request.method === "DELETE" && tabCloseMatch) {
+    try {
+      const tabId = decodePathPart(tabCloseMatch[1]!);
+      assertSafePositional(tabId, "tabId");
+      await cli.text(["tab", "close", tabId]);
+      const refreshError = await refreshAfterMutation(engine, true, "Tab was closed");
+      if (refreshError) return refreshError;
+      return json({ ok: true });
+    } catch (error) {
+      if (error instanceof TypeError) return json({ ok: false, error: error.message }, 400);
+      return errorResponse(error);
+    }
+  }
+
+  const workspaceCloseMatch = url.pathname.match(/^\/workspace\/([^/]+)$/);
+  if (request.method === "DELETE" && workspaceCloseMatch) {
+    try {
+      const workspaceId = decodePathPart(workspaceCloseMatch[1]!);
+      assertSafePositional(workspaceId, "workspaceId");
+      await cli.text(["workspace", "close", workspaceId]);
+      const refreshError = await refreshAfterMutation(engine, true, "Workspace was closed");
+      if (refreshError) return refreshError;
+      return json({ ok: true });
+    } catch (error) {
+      if (error instanceof TypeError) return json({ ok: false, error: error.message }, 400);
+      return errorResponse(error);
+    }
+  }
+
   return json({ ok: false, error: "Not found" }, 404);
 }
 

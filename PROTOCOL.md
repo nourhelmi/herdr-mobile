@@ -177,3 +177,37 @@ Additive. The v1 and v1.1 tables above stay the contract.
 Workspace and tab creation use the same freshness rule with a **structure**
 poll and route-specific partial-success text (`Workspace was created` /
 `Tab was created`). Prompt, keys, and pane input keep periodic WS state.
+
+## Close-controls addendum
+
+Additive. The v1, v1.1, and v2 tables above stay the contract.
+
+### HTTP
+
+| Method | Path | Body | Response |
+| --- | --- | --- | --- |
+| DELETE | `/pane/:id` | none | `{"ok":true}` |
+| DELETE | `/tab/:id` | none | `{"ok":true}` |
+| DELETE | `/workspace/:id` | none | `{"ok":true}` |
+
+- Bodyless. Do not send `Content-Type` or `{}`.
+- Exact argv only: `herdr pane close <paneId>`, `herdr tab close <tabId>`,
+  `herdr workspace close <workspaceId>`. No shell interpolation, aliases, or
+  extra payload fields.
+- The sidecar decodes `:id` and rejects flag-like values (400) before spawning.
+- Detectable missing targets map to 404. CLI failures map to 502 with a
+  redacted `"Herdr command failed"` message. Do not treat a CLI failure as a
+  blanket 500.
+- 2xx means the close command and a sidecar **structure** poll both completed.
+  Clients then fetch `/state` before showing success.
+- If close succeeds but the sidecar poll fails, the response is 502
+  `{"ok":false,"error":"<resource> was closed, but state refresh failed; refresh before retrying"}`
+  (`Pane was closed` / `Tab was closed` / `Workspace was closed`). Refresh
+  before retrying. Do not treat this as an untouched cache.
+
+### Interrupt
+
+No new route. Interrupt reuses `POST /agent/:target/keys` with
+`{"keys":["ctrl+c"]}`, which wraps `herdr agent send-keys <target> ctrl+c`.
+That is non-destructive: layout is preserved, and keys keep periodic WS state
+(no post-mutation structure poll).

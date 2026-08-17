@@ -435,6 +435,144 @@ describe("sidecar v2 HTTP integration", () => {
   });
 });
 
+describe("sidecar close-controls HTTP integration", () => {
+  test("closes pane, tab, and workspace with exact argv and a structure poll", async () => {
+    const { baseUrl, cli, engine } = startTestServer();
+
+    const pane = await fetch(`${baseUrl}/pane/w1%3Ap1`, { method: "DELETE" });
+    expect(pane.status).toBe(200);
+    expect(await jsonResponse(pane)).toEqual({ ok: true });
+
+    const tab = await fetch(`${baseUrl}/tab/w1%3At4`, { method: "DELETE" });
+    expect(tab.status).toBe(200);
+    expect(await jsonResponse(tab)).toEqual({ ok: true });
+
+    const workspace = await fetch(`${baseUrl}/workspace/w1`, { method: "DELETE" });
+    expect(workspace.status).toBe(200);
+    expect(await jsonResponse(workspace)).toEqual({ ok: true });
+
+    expect(cli.calls).toEqual([
+      ["pane", "close", "w1:p1"],
+      ["tab", "close", "w1:t4"],
+      ["workspace", "close", "w1"],
+    ]);
+    expect(engine.pollCalls).toEqual([true, true, true]);
+  });
+
+  test("interrupts via existing keys action without a structure poll", async () => {
+    const { baseUrl, cli, engine } = startTestServer();
+
+    const response = await fetch(`${baseUrl}/agent/w1%3Ap1/keys`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ keys: ["ctrl+c"] }),
+    });
+    expect(response.status).toBe(200);
+    expect(await jsonResponse(response)).toEqual({ ok: true });
+    expect(cli.calls).toEqual([["agent", "send-keys", "w1:p1", "ctrl+c"]]);
+    expect(engine.pollCalls).toHaveLength(0);
+  });
+
+  test("rejects encoded --help before any CLI or poll call", async () => {
+    const { baseUrl, cli, engine } = startTestServer();
+    const flag = encodeURIComponent("--help");
+    const requests = [
+      fetch(`${baseUrl}/pane/${flag}`, { method: "DELETE" }),
+      fetch(`${baseUrl}/tab/${flag}`, { method: "DELETE" }),
+      fetch(`${baseUrl}/workspace/${flag}`, { method: "DELETE" }),
+    ];
+
+    for (const response of await Promise.all(requests)) expect(response.status).toBe(400);
+    expect(cli.calls).toHaveLength(0);
+    expect(engine.pollCalls).toHaveLength(0);
+  });
+
+  test("maps missing close targets to 404 without polling", async () => {
+    const { baseUrl, cli, engine } = startTestServer();
+
+    const pane = await fetch(`${baseUrl}/pane/missing`, { method: "DELETE" });
+    expect(pane.status).toBe(404);
+    expect(await jsonResponse(pane)).toEqual({ ok: false, error: "Target not found" });
+
+    const tab = await fetch(`${baseUrl}/tab/missing`, { method: "DELETE" });
+    expect(tab.status).toBe(404);
+    expect(await jsonResponse(tab)).toEqual({ ok: false, error: "Target not found" });
+
+    const workspace = await fetch(`${baseUrl}/workspace/missing`, { method: "DELETE" });
+    expect(workspace.status).toBe(404);
+    expect(await jsonResponse(workspace)).toEqual({ ok: false, error: "Target not found" });
+
+    expect(cli.calls).toEqual([
+      ["pane", "close", "missing"],
+      ["tab", "close", "missing"],
+      ["workspace", "close", "missing"],
+    ]);
+    expect(engine.pollCalls).toHaveLength(0);
+  });
+
+  test("redacts close CLI failures as 502 without polling", async () => {
+    const { baseUrl, cli, engine } = startTestServer();
+
+    const pane = await fetch(`${baseUrl}/pane/failure`, { method: "DELETE" });
+    expect(pane.status).toBe(502);
+    const paneBody = await jsonResponse(pane);
+    expect(paneBody).toEqual({ ok: false, error: "Herdr command failed" });
+    expect(JSON.stringify(paneBody).includes("top-secret")).toBe(false);
+
+    const tab = await fetch(`${baseUrl}/tab/failure`, { method: "DELETE" });
+    expect(tab.status).toBe(502);
+    const tabBody = await jsonResponse(tab);
+    expect(tabBody).toEqual({ ok: false, error: "Herdr command failed" });
+    expect(JSON.stringify(tabBody).includes("top-secret")).toBe(false);
+
+    const workspace = await fetch(`${baseUrl}/workspace/failure`, { method: "DELETE" });
+    expect(workspace.status).toBe(502);
+    const workspaceBody = await jsonResponse(workspace);
+    expect(workspaceBody).toEqual({ ok: false, error: "Herdr command failed" });
+    expect(JSON.stringify(workspaceBody).includes("top-secret")).toBe(false);
+
+    expect(cli.calls).toEqual([
+      ["pane", "close", "failure"],
+      ["tab", "close", "failure"],
+      ["workspace", "close", "failure"],
+    ]);
+    expect(engine.pollCalls).toHaveLength(0);
+  });
+
+  test("returns partial-success 502 when close succeeds but the structure poll fails", async () => {
+    const { baseUrl, cli, engine } = startTestServer();
+    engine.pollResult = false;
+
+    const pane = await fetch(`${baseUrl}/pane/w1%3Ap1`, { method: "DELETE" });
+    expect(pane.status).toBe(502);
+    expect(await jsonResponse(pane)).toEqual({
+      ok: false,
+      error: "Pane was closed, but state refresh failed; refresh before retrying",
+    });
+
+    const tab = await fetch(`${baseUrl}/tab/w1%3At4`, { method: "DELETE" });
+    expect(tab.status).toBe(502);
+    expect(await jsonResponse(tab)).toEqual({
+      ok: false,
+      error: "Tab was closed, but state refresh failed; refresh before retrying",
+    });
+
+    const workspace = await fetch(`${baseUrl}/workspace/w1`, { method: "DELETE" });
+    expect(workspace.status).toBe(502);
+    expect(await jsonResponse(workspace)).toEqual({
+      ok: false,
+      error: "Workspace was closed, but state refresh failed; refresh before retrying",
+    });
+
+    expect(cli.calls).toEqual([
+      ["pane", "close", "w1:p1"],
+      ["tab", "close", "w1:t4"],
+      ["workspace", "close", "w1"],
+    ]);
+    expect(engine.pollCalls).toEqual([true, true, true]);
+  });
+});
+
 describe("sidecar WebSocket integration", () => {
   test("serializes reads, drops stale output, replaces watches, and cleans up on unwatch and close", async () => {
     const cli = new FakeCli();
