@@ -8,6 +8,7 @@ interface PaneWatch {
   generation: number;
   paneId: string;
   lines: number;
+  format: "text" | "ansi";
   lastText?: string;
 }
 
@@ -24,6 +25,7 @@ export const MAX_PROMPT_TEXT_LENGTH = 16_000;
 export const MAX_KEYS_COUNT = 32;
 export const MAX_KEY_LENGTH = 128;
 export const MAX_OUTPUT_LINES = 2_000;
+export const MAX_LABEL_LENGTH = 128;
 
 function json(value: unknown, status = 200): Response {
   return Response.json(value, { status });
@@ -118,6 +120,24 @@ function validateKeys(keys: string[]): void {
   }
 }
 
+function parseFormat(value: unknown, fallback: "text" | "ansi"): "text" | "ansi" {
+  if (value === null || value === undefined || value === "") return fallback;
+  if (value === "text" || value === "ansi") return value;
+  throw new TypeError("format must be text or ansi");
+}
+
+/** Optional user label: length-capped, never flag-like. Empty omits the CLI flag. */
+function validateLabel(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") throw new TypeError("label must be a string");
+  if (value.length === 0) return undefined;
+  if (value.length > MAX_LABEL_LENGTH) {
+    throw new TypeError(`label must not exceed ${MAX_LABEL_LENGTH} characters`);
+  }
+  assertSafePositional(value, "label");
+  return value;
+}
+
 /** Exact 127.0.0.1 or numerically-parsed unicast IPv4. Rejects wildcards, multicast, class-E, IPv6. */
 export function isSafeTailscaleIpv4(value: string): boolean {
   if (value === "127.0.0.1") return true;
@@ -153,10 +173,7 @@ async function handleHttp(request: Request, engine: StateEngine, cli: HerdrCli):
       const paneId = decodePathPart(outputMatch[1]!);
       assertSafePositional(paneId, "paneId");
       const lines = parseLines(url.searchParams.get("lines"), 200);
-      const format = url.searchParams.get("format") ?? "text";
-      if (format !== "text" && format !== "ansi") {
-        return json({ ok: false, error: "format must be text or ansi" }, 400);
-      }
+      const format = parseFormat(url.searchParams.get("format"), "text");
       const text = await cli.text([
         "pane",
         "read",
@@ -187,6 +204,62 @@ async function handleHttp(request: Request, engine: StateEngine, cli: HerdrCli):
       const text = (body as { text: string }).text;
       validatePromptText(text);
       await cli.text(["agent", "prompt", target, text]);
+      return json({ ok: true });
+    } catch (error) {
+      if (error instanceof TypeError) return json({ ok: false, error: error.message }, 400);
+      return errorResponse(error);
+    }
+  }
+
+  if (request.method === "POST" && url.pathname === "/workspace") {
+    try {
+      const body = await readJsonBody(request);
+      if (body !== null && (typeof body !== "object" || Array.isArray(body))) {
+        return json({ ok: false, error: "body must be a JSON object" }, 400);
+      }
+      const label = validateLabel((body as { label?: unknown } | null)?.label);
+      const args = ["workspace", "create"];
+      if (label !== undefined) args.push("--label", label);
+      await cli.text(args);
+      return json({ ok: true });
+    } catch (error) {
+      if (error instanceof TypeError) return json({ ok: false, error: error.message }, 400);
+      return errorResponse(error);
+    }
+  }
+
+  const tabCreateMatch = url.pathname.match(/^\/workspace\/([^/]+)\/tab$/);
+  if (request.method === "POST" && tabCreateMatch) {
+    try {
+      const workspaceId = decodePathPart(tabCreateMatch[1]!);
+      assertSafePositional(workspaceId, "workspaceId");
+      const body = await readJsonBody(request);
+      if (body !== null && (typeof body !== "object" || Array.isArray(body))) {
+        return json({ ok: false, error: "body must be a JSON object" }, 400);
+      }
+      const label = validateLabel((body as { label?: unknown } | null)?.label);
+      const args = ["tab", "create", "--workspace", workspaceId];
+      if (label !== undefined) args.push("--label", label);
+      await cli.text(args);
+      return json({ ok: true });
+    } catch (error) {
+      if (error instanceof TypeError) return json({ ok: false, error: error.message }, 400);
+      return errorResponse(error);
+    }
+  }
+
+  const inputMatch = url.pathname.match(/^\/pane\/([^/]+)\/input$/);
+  if (request.method === "POST" && inputMatch) {
+    try {
+      const paneId = decodePathPart(inputMatch[1]!);
+      assertSafePositional(paneId, "paneId");
+      const body = await readJsonBody(request);
+      if (!body || typeof body !== "object" || typeof (body as { text?: unknown }).text !== "string") {
+        return json({ ok: false, error: "text must be a string" }, 400);
+      }
+      const text = (body as { text: string }).text;
+      validatePromptText(text);
+      await cli.text(["pane", "send-text", paneId, text]);
       return json({ ok: true });
     } catch (error) {
       if (error instanceof TypeError) return json({ ok: false, error: error.message }, 400);
@@ -265,12 +338,12 @@ export function startSidecar(options: {
         "--lines",
         String(watch.lines),
         "--format",
-        "text",
+        watch.format,
       ]);
       if (!isCurrentWatch(ws, watch)) return;
       if (force || text !== watch.lastText) {
         watch.lastText = text;
-        ws.send(JSON.stringify({ type: "output", paneId: watch.paneId, text, format: "text" }));
+        ws.send(JSON.stringify({ type: "output", paneId: watch.paneId, text, format: watch.format }));
       }
     } catch (error) {
       if (!isCurrentWatch(ws, watch)) return;
@@ -319,7 +392,7 @@ export function startSidecar(options: {
         return;
       }
 
-      const value = message as { type?: unknown; paneId?: unknown; lines?: unknown };
+      const value = message as { type?: unknown; paneId?: unknown; lines?: unknown; format?: unknown };
       if (value.type === "unwatch") {
         clearWatch(ws);
         return;
@@ -335,11 +408,13 @@ export function startSidecar(options: {
         }
         assertSafePositional(value.paneId, "paneId");
         const lines = parseLines(value.lines, 200);
+        const format = parseFormat(value.format, "text");
         clearWatch(ws);
         const watch: PaneWatch = {
           generation: ws.data.generation,
           paneId: value.paneId,
           lines,
+          format,
         };
         ws.data.watch = watch;
         queueOutput(ws, watch, true);

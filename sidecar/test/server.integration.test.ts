@@ -5,6 +5,7 @@ import {
   isSafeTailscaleIpv4,
   MAX_KEYS_COUNT,
   MAX_KEY_LENGTH,
+  MAX_LABEL_LENGTH,
   MAX_OUTPUT_LINES,
   MAX_PROMPT_TEXT_LENGTH,
   MAX_REQUEST_BODY_BYTES,
@@ -265,6 +266,89 @@ describe("sidecar HTTP integration", () => {
   });
 });
 
+describe("sidecar v1.1 HTTP integration", () => {
+  test("creates a workspace and tab, and forwards raw pane text", async () => {
+    const { baseUrl, cli } = startTestServer();
+
+    const workspace = await fetch(`${baseUrl}/workspace`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ label: "field-log" }),
+    });
+    expect(workspace.status).toBe(200);
+    expect(await jsonResponse(workspace)).toEqual({ ok: true });
+
+    const unlabeled = await fetch(`${baseUrl}/workspace`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(unlabeled.status).toBe(200);
+
+    const tab = await fetch(`${baseUrl}/workspace/w1/tab`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ label: "server" }),
+    });
+    expect(tab.status).toBe(200);
+    expect(await jsonResponse(tab)).toEqual({ ok: true });
+
+    const input = await fetch(`${baseUrl}/pane/w1%3Ap1/input`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "/model" }),
+    });
+    expect(input.status).toBe(200);
+    expect(await jsonResponse(input)).toEqual({ ok: true });
+
+    expect(cli.calls).toEqual([
+      ["workspace", "create", "--label", "field-log"],
+      ["workspace", "create"],
+      ["tab", "create", "--workspace", "w1", "--label", "server"],
+      ["pane", "send-text", "w1:p1", "/model"],
+    ]);
+  });
+
+  test("rejects flag-like and overlong labels and input before invoking Herdr", async () => {
+    const { baseUrl, cli } = startTestServer();
+    const requests = [
+      fetch(`${baseUrl}/workspace`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ label: "--help" }),
+      }),
+      fetch(`${baseUrl}/workspace`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ label: "x".repeat(MAX_LABEL_LENGTH + 1) }),
+      }),
+      fetch(`${baseUrl}/workspace/${encodeURIComponent("--help")}/tab`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      }),
+      fetch(`${baseUrl}/workspace/w1/tab`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ label: "-inject" }),
+      }),
+      fetch(`${baseUrl}/pane/w1%3Ap1/input`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text: "--flag" }),
+      }),
+      fetch(`${baseUrl}/pane/${encodeURIComponent("--help")}/input`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text: "safe" }),
+      }),
+    ];
+
+    for (const response of await Promise.all(requests)) expect(response.status).toBe(400);
+    expect(cli.calls).toHaveLength(0);
+  });
+});
+
 describe("sidecar WebSocket integration", () => {
   test("serializes reads, drops stale output, replaces watches, and cleans up on unwatch and close", async () => {
     const cli = new FakeCli();
@@ -329,6 +413,27 @@ describe("sidecar WebSocket integration", () => {
       "four validation errors",
     );
     expect(cli.calls).toHaveLength(0);
+  });
+
+  test("watch format ansi is passed through to pane read and output frames", async () => {
+    const { baseUrl, cli } = startTestServer();
+    const { socket, messages } = await connectWebSocket(baseUrl);
+    send(socket, { type: "watch", paneId: "w1:p1", lines: 20, format: "ansi" });
+    await waitUntil(
+      () => messages.some((message) => message.type === "output" && message.format === "ansi"),
+      "ansi output",
+    );
+    expect(cli.calls[0]).toEqual([
+      "pane",
+      "read",
+      "w1:p1",
+      "--source",
+      "recent-unwrapped",
+      "--lines",
+      "20",
+      "--format",
+      "ansi",
+    ]);
   });
 });
 

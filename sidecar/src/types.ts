@@ -37,9 +37,19 @@ export interface RawPane {
   cwd?: string;
 }
 
+/** v1.1 parsed `display_agent`. `displayName` stays the raw Herdr string. */
+export interface AgentDisplay {
+  text: string;
+  model: string | null;
+  repo: string | null;
+  branch: string | null;
+  cost: string | null;
+}
+
 export interface AgentSnapshot {
   name: string;
   displayName: string | null;
+  display: AgentDisplay;
   paneId: string;
   workspaceId: string;
   tabId: string;

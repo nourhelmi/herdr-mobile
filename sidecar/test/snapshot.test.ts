@@ -46,7 +46,15 @@ describe("buildSnapshot", () => {
       name: "pi",
       paneId: "w1:pDF",
       paneLabel: labeledAgentPane!.label,
+      display: {
+        model: "claude-fable-5",
+        repo: "ai-tutor",
+        branch: "main",
+        cost: "$0.00",
+      },
     });
+    expect(agent!.display.text.includes("\uE0B0")).toBe(false);
+    expect(agent!.display.text.includes("claude-fable-5")).toBe(true);
     const embedded = snapshot.workspaces
       .flatMap((workspace) => workspace.tabs)
       .flatMap((tab) => tab.panes)

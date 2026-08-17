@@ -102,3 +102,48 @@ JSON text frames, every message has `type`.
   exponential backoff (1s, 2s, 4s… cap 30s) and re-sends `watch` after
   reconnect.
 - Actions (prompt/keys) always go over HTTP, never WS.
+
+## v1.1 addendum
+
+Additive. The v1 tables above stay the contract. v1 clients ignore unknown
+fields and unused routes.
+
+### Snapshot
+
+Each `agents[]` item (and embedded `pane.agent`) gains:
+
+```jsonc
+"display": {
+  "text": "π · gpt-5.6-luna · herdr-mobile · main · $0.56",
+  "model": "gpt-5.6-luna",
+  "repo": "herdr-mobile",
+  "branch": "main",          // null when Herdr omitted it
+  "cost": "$0.56"
+}
+```
+
+Parsed from Herdr `display_agent`. `displayName` remains the raw string
+(Powerline/Nerd PUA separators). `display.text` is that string with Private
+Use scalars removed and fields joined by ` · `. Home and the agent status
+chip should prefer `display`.
+
+### HTTP
+
+| Method | Path | Body | Response |
+| --- | --- | --- | --- |
+| POST | `/workspace` | `{"label"?:"..."}` | `{"ok":true}` |
+| POST | `/workspace/:id/tab` | `{"label"?:"..."}` | `{"ok":true}` |
+| POST | `/pane/:id/input` | `{"text":"..."}` | `{"ok":true}` |
+
+- Labels are optional user text. Max 128 characters. Rejected if they start
+  with `-` (Herdr 0.8 treats those as flags). Empty/`{}` omits `--label`.
+- `/pane/:id/input` wraps `herdr pane send-text`. Same text limits and
+  flag-like rejection as `/agent/:target/prompt` (16,000 chars).
+- Create wraps `herdr workspace create` and `herdr tab create --workspace`.
+  No `--focus`. Refresh `/state` after success.
+
+### WebSocket
+
+`watch` accepts optional `format`: `"text"` (v1 default) or `"ansi"`.
+Output frames echo that format. Terminal-mode clients should watch `ansi`
+and render SGR locally; Prompt mode strips + trims Pi TUI chrome on device.

@@ -1,3 +1,4 @@
+import { parseDisplayAgent } from "./display";
 import type {
   AgentSnapshot,
   RawAgent,
@@ -31,6 +32,7 @@ export function buildSnapshot(input: SnapshotInput): Snapshot {
   const agents = input.agents.map<AgentSnapshot>((agent) => ({
     name: agent.agent ?? "unknown",
     displayName: agent.display_agent ?? null,
+    display: parseDisplayAgent(agent.display_agent),
     paneId: agent.pane_id,
     workspaceId: agent.workspace_id,
     tabId: agent.tab_id,

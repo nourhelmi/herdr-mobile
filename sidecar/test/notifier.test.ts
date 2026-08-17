@@ -18,6 +18,7 @@ function agent(state: string): AgentSnapshot {
   return {
     name: "pi",
     displayName: null,
+    display: { text: "", model: null, repo: null, branch: null, cost: null },
     paneId: "w9:p1",
     workspaceId: "w9",
     tabId: "w9:t1",
