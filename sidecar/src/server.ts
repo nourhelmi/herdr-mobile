@@ -31,8 +31,16 @@ function json(value: unknown, status = 200): Response {
   return Response.json(value, { status });
 }
 
+function safeErrorMessage(error: unknown): string {
+  if (typeof error === "string") return error;
+  if (error instanceof TypeError) return error.message;
+  if (isUnknownTarget(error)) return "Target not found";
+  if (error instanceof CliError) return "Herdr command failed";
+  return "Internal sidecar error";
+}
+
 function errorResponse(error: unknown): Response {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = safeErrorMessage(error);
   if (isUnknownTarget(error)) return json({ ok: false, error: message }, 404);
   if (error instanceof CliError) return json({ ok: false, error: message }, 502);
   return json({ ok: false, error: message }, 500);
@@ -347,8 +355,7 @@ export function startSidecar(options: {
       }
     } catch (error) {
       if (!isCurrentWatch(ws, watch)) return;
-      const message = error instanceof Error ? error.message : String(error);
-      ws.send(JSON.stringify({ type: "error", message }));
+      ws.send(JSON.stringify({ type: "error", message: safeErrorMessage(error) }));
     } finally {
       if (isCurrentWatch(ws, watch)) {
         ws.data.timer = setTimeout(() => {
@@ -369,8 +376,7 @@ export function startSidecar(options: {
   };
 
   const sendWsError = (ws: ServerWebSocket<WebSocketData>, error: unknown): void => {
-    const message = error instanceof Error ? error.message : String(error);
-    ws.send(JSON.stringify({ type: "error", message }));
+    ws.send(JSON.stringify({ type: "error", message: safeErrorMessage(error) }));
   };
 
   const websocket = {

@@ -52,7 +52,7 @@ class FakeCli implements HerdrCli {
     this.calls.push([...args]);
     const target = args[2];
     if (target === "missing") throw new CliError("target not found", 1);
-    if (target === "failure") throw new CliError("herdr failed", 1);
+    if (target === "failure") throw new CliError("herdr failed with secret=top-secret", 1);
 
     if (args[0] === "pane" && args[1] === "read") {
       if (!this.deferPaneReads) return `output:${target}`;
@@ -203,11 +203,11 @@ describe("sidecar HTTP integration", () => {
 
     const missing = await fetch(`${baseUrl}/pane/missing/output`);
     expect(missing.status).toBe(404);
-    expect(await jsonResponse(missing)).toMatchObject({ ok: false });
+    expect(await jsonResponse(missing)).toEqual({ ok: false, error: "Target not found" });
 
     const failed = await fetch(`${baseUrl}/pane/failure/output`);
     expect(failed.status).toBe(502);
-    expect(await jsonResponse(failed)).toMatchObject({ ok: false });
+    expect(await jsonResponse(failed)).toEqual({ ok: false, error: "Herdr command failed" });
 
     const unknownRoute = await fetch(`${baseUrl}/unknown`);
     expect(unknownRoute.status).toBe(404);
@@ -413,6 +413,15 @@ describe("sidecar WebSocket integration", () => {
       "four validation errors",
     );
     expect(cli.calls).toHaveLength(0);
+
+    send(socket, { type: "watch", paneId: "failure" });
+    await waitUntil(
+      () => messages.some((message) => message.message === "Herdr command failed"),
+      "redacted Herdr error",
+    );
+    expect(messages.find((message) => message.message === "Herdr command failed")).toBeDefined();
+    expect(messages.some((message) => String(message.message).includes("top-secret"))).toBe(false);
+    expect(cli.calls).toContainEqual(expect.arrayContaining(["pane", "read", "failure"]));
   });
 
   test("watch format ansi is passed through to pane read and output frames", async () => {
