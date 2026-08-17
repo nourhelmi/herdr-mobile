@@ -68,7 +68,6 @@ Notes:
 | GET | `/health` | — | `{"ok":true,"version":"1.x","herdr":true}` (`herdr:false` if last poll failed) |
 | GET | `/state` | — | Snapshot (above) |
 | GET | `/pane/:id/output` | `lines` (default 200), `format` = `text`\|`ansi` (default `text`) | `{"paneId":"w1:p7","format":"text","text":"..."}` |
-| POST | `/agent/:target/prompt` | body `{"text":"..."}` | `{"ok":true}` |
 | POST | `/agent/:target/keys` | body `{"keys":["esc"]}` | `{"ok":true}` |
 
 - `:id` / `:target` are URL-path-encoded (pane ids contain `:` — encode as `%3A`;
@@ -87,7 +86,7 @@ JSON text frames, every message has `type`.
 | type | payload | when |
 | --- | --- | --- |
 | `state` | `{type:"state", state:<Snapshot>}` | on connect + on every detected diff |
-| `output` | `{type:"output", paneId, text, format:"text"}` | watched pane output changed (~250ms poll) |
+| `output` | `{type:"output", paneId, text, format:"text"}` | watched pane output changed (~100ms poll; input/keys poke an immediate read) |
 | `error` | `{type:"error", message}` | bad client message or watch failure |
 
 ### Client → server
@@ -101,7 +100,14 @@ JSON text frames, every message has `type`.
 - Server sends WS protocol-level pings every 30s. Client reconnects with
   exponential backoff (1s, 2s, 4s… cap 30s) and re-sends `watch` after
   reconnect.
-- Actions (prompt/keys) always go over HTTP, never WS.
+- Actions (input/keys) always go over HTTP, never WS.
+- After a successful `POST /pane/:id/input` (`pane send-text`) or
+  `POST /agent/:target/keys` (`agent send-keys`), the sidecar immediately
+  queues one serialized pane read on every WebSocket watcher whose watched
+  pane matches. Keys resolve `target` → pane id from the current snapshot
+  (pane id first, then agent name). A poke while a read is in flight
+  coalesces to one follow-up; it does not stack unbounded reads. Unwatch
+  bumps generation, so a poke after unwatch is a no-op.
 
 ## v1.1 addendum
 
@@ -137,8 +143,8 @@ chip should prefer `display`.
 
 - Labels are optional user text. Max 128 characters. Rejected if they start
   with `-` (Herdr 0.8 treats those as flags). Empty/`{}` omits `--label`.
-- `/pane/:id/input` wraps `herdr pane send-text`. Same text limits and
-  flag-like rejection as `/agent/:target/prompt` (16,000 chars).
+- `/pane/:id/input` wraps `herdr pane send-text`. Text is capped at 16,000
+  characters and rejected if flag-like (starts with `-`).
 - Create wraps `herdr workspace create` and `herdr tab create --workspace`.
   No `--focus`. Refresh `/state` after success.
 
@@ -176,7 +182,8 @@ Additive. The v1 and v1.1 tables above stay the contract.
 
 Workspace and tab creation use the same freshness rule with a **structure**
 poll and route-specific partial-success text (`Workspace was created` /
-`Tab was created`). Prompt, keys, and pane input keep periodic WS state.
+`Tab was created`). Keys and pane input keep periodic WS state and poke
+matching watchers for an immediate serialized read.
 
 ## Close-controls addendum
 
@@ -210,4 +217,11 @@ Additive. The v1, v1.1, and v2 tables above stay the contract.
 No new route. Interrupt reuses `POST /agent/:target/keys` with
 `{"keys":["ctrl+c"]}`, which wraps `herdr agent send-keys <target> ctrl+c`.
 That is non-destructive: layout is preserved, and keys keep periodic WS state
-(no post-mutation structure poll).
+(no post-mutation structure poll). A successful interrupt still pokes matching
+watchers for an immediate serialized read.
+
+### Live output
+
+Watched pane output polls every **100ms**. A successful pane input or agent
+keys action does not wait for that interval: it queues one serialized
+`pane read` on each matching watcher (see WebSocket notes above).

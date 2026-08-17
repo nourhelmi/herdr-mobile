@@ -10,6 +10,8 @@ interface PaneWatch {
   lines: number;
   format: "text" | "ansi";
   lastText?: string;
+  /** At most one extra read after the in-flight one; poke during a read sets this. */
+  pokeQueued: boolean;
 }
 
 interface WebSocketData {
@@ -21,12 +23,12 @@ interface WebSocketData {
 }
 
 export const MAX_REQUEST_BODY_BYTES = 64 * 1024;
-export const MAX_PROMPT_TEXT_LENGTH = 16_000;
+export const MAX_INPUT_TEXT_LENGTH = 16_000;
 export const MAX_KEYS_COUNT = 32;
 export const MAX_KEY_LENGTH = 128;
 export const MAX_OUTPUT_LINES = 2_000;
 export const MAX_LABEL_LENGTH = 128;
-export const DEFAULT_OUTPUT_INTERVAL_MS = 250;
+export const DEFAULT_OUTPUT_INTERVAL_MS = 100;
 
 function json(value: unknown, status = 200): Response {
   return Response.json(value, { status });
@@ -110,11 +112,19 @@ async function readJsonBody(request: Request): Promise<unknown> {
   }
 }
 
-function validatePromptText(text: string): void {
-  if (text.length > MAX_PROMPT_TEXT_LENGTH) {
-    throw new TypeError(`text must not exceed ${MAX_PROMPT_TEXT_LENGTH} characters`);
+function validateInputText(text: string): void {
+  if (text.length > MAX_INPUT_TEXT_LENGTH) {
+    throw new TypeError(`text must not exceed ${MAX_INPUT_TEXT_LENGTH} characters`);
   }
   assertSafePositional(text, "text");
+}
+
+function paneIdForKeysTarget(snapshot: Snapshot, target: string): string {
+  const byPane = snapshot.agents.find((agent) => agent.paneId === target);
+  if (byPane) return byPane.paneId;
+  const byName = snapshot.agents.find((agent) => agent.name === target);
+  if (byName) return byName.paneId;
+  return target;
 }
 
 function validateKeys(keys: string[]): void {
@@ -175,7 +185,12 @@ async function refreshAfterMutation(
   );
 }
 
-async function handleHttp(request: Request, engine: StateEngine, cli: HerdrCli): Promise<Response> {
+async function handleHttp(
+  request: Request,
+  engine: StateEngine,
+  cli: HerdrCli,
+  pokePane: (paneId: string) => void,
+): Promise<Response> {
   let url: URL;
   try {
     url = new URL(request.url);
@@ -223,25 +238,6 @@ async function handleHttp(request: Request, engine: StateEngine, cli: HerdrCli):
       await cli.text(["agent", "focus", target]);
       const refreshError = await refreshAfterMutation(engine, false, "Agent was acknowledged");
       if (refreshError) return refreshError;
-      return json({ ok: true });
-    } catch (error) {
-      if (error instanceof TypeError) return json({ ok: false, error: error.message }, 400);
-      return errorResponse(error);
-    }
-  }
-
-  const promptMatch = url.pathname.match(/^\/agent\/([^/]+)\/prompt$/);
-  if (request.method === "POST" && promptMatch) {
-    try {
-      const target = decodePathPart(promptMatch[1]!);
-      assertSafePositional(target, "target");
-      const body = await readJsonBody(request);
-      if (!body || typeof body !== "object" || typeof (body as { text?: unknown }).text !== "string") {
-        return json({ ok: false, error: "text must be a string" }, 400);
-      }
-      const text = (body as { text: string }).text;
-      validatePromptText(text);
-      await cli.text(["agent", "prompt", target, text]);
       return json({ ok: true });
     } catch (error) {
       if (error instanceof TypeError) return json({ ok: false, error: error.message }, 400);
@@ -300,8 +296,9 @@ async function handleHttp(request: Request, engine: StateEngine, cli: HerdrCli):
         return json({ ok: false, error: "text must be a string" }, 400);
       }
       const text = (body as { text: string }).text;
-      validatePromptText(text);
+      validateInputText(text);
       await cli.text(["pane", "send-text", paneId, text]);
+      pokePane(paneId);
       return json({ ok: true });
     } catch (error) {
       if (error instanceof TypeError) return json({ ok: false, error: error.message }, 400);
@@ -321,6 +318,7 @@ async function handleHttp(request: Request, engine: StateEngine, cli: HerdrCli):
       }
       validateKeys(keys);
       await cli.text(["agent", "send-keys", target, ...keys]);
+      pokePane(paneIdForKeysTarget(engine.snapshot, target));
       return json({ ok: true });
     } catch (error) {
       if (error instanceof TypeError) return json({ ok: false, error: error.message }, 400);
@@ -436,12 +434,17 @@ export function startSidecar(options: {
       if (!isCurrentWatch(ws, watch)) return;
       ws.send(JSON.stringify({ type: "error", message: safeErrorMessage(error) }));
     } finally {
-      if (isCurrentWatch(ws, watch)) {
-        ws.data.timer = setTimeout(() => {
-          ws.data.timer = undefined;
-          queueOutput(ws, watch, false);
-        }, outputIntervalMs);
+      if (!isCurrentWatch(ws, watch)) return;
+      // Poke during this read: one immediate follow-up, skip the interval.
+      if (watch.pokeQueued) {
+        watch.pokeQueued = false;
+        queueOutput(ws, watch, false);
+        return;
       }
+      ws.data.timer = setTimeout(() => {
+        ws.data.timer = undefined;
+        queueOutput(ws, watch, false);
+      }, outputIntervalMs);
     }
   };
 
@@ -452,6 +455,22 @@ export function startSidecar(options: {
   ): void => {
     const run = () => pushOutput(ws, watch, force);
     ws.data.readQueue = ws.data.readQueue.then(run, run);
+  };
+
+  // Idle (timer pending) → cancel and read now. In-flight/queued → one follow-up.
+  const pokePane = (paneId: string): void => {
+    for (const ws of clients) {
+      const watch = ws.data.watch;
+      if (!watch || watch.paneId !== paneId) continue;
+      if (!isCurrentWatch(ws, watch)) continue;
+      if (ws.data.timer) {
+        clearTimeout(ws.data.timer);
+        ws.data.timer = undefined;
+        queueOutput(ws, watch, false);
+        continue;
+      }
+      watch.pokeQueued = true;
+    }
   };
 
   const sendWsError = (ws: ServerWebSocket<WebSocketData>, error: unknown): void => {
@@ -500,6 +519,7 @@ export function startSidecar(options: {
           paneId: value.paneId,
           lines,
           format,
+          pokeQueued: false,
         };
         ws.data.watch = watch;
         queueOutput(ws, watch, true);
@@ -538,7 +558,7 @@ export function startSidecar(options: {
               ? undefined
               : json({ ok: false, error: "WebSocket upgrade failed" }, 400);
           }
-          return handleHttp(request, options.engine, options.cli);
+          return handleHttp(request, options.engine, options.cli, pokePane);
         },
         websocket,
       });

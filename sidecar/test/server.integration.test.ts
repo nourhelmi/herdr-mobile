@@ -8,7 +8,7 @@ import {
   MAX_KEY_LENGTH,
   MAX_LABEL_LENGTH,
   MAX_OUTPUT_LINES,
-  MAX_PROMPT_TEXT_LENGTH,
+  MAX_INPUT_TEXT_LENGTH,
   MAX_REQUEST_BODY_BYTES,
   type RunningSidecar,
   startSidecar,
@@ -20,6 +20,28 @@ const snapshot: Snapshot = {
   workspaces: [],
   agents: [],
 };
+
+const agentSnapshot: Snapshot = {
+  generatedAt: snapshot.generatedAt,
+  workspaces: [],
+  agents: [
+    {
+      name: "pi",
+      displayName: null,
+      display: { text: "pi", model: null, repo: null, branch: null, cost: null },
+      paneId: "w1:p1",
+      workspaceId: "w1",
+      tabId: "w1:t1",
+      state: "idle",
+      cwd: "/tmp",
+      paneLabel: null,
+    },
+  ],
+};
+
+function paneReads(cli: FakeCli): string[][] {
+  return cli.calls.filter((args) => args[0] === "pane" && args[1] === "read");
+}
 
 class FakeEngine {
   herdrOk = true;
@@ -144,7 +166,7 @@ function send(socket: WebSocket, value: unknown): void {
 }
 
 describe("sidecar HTTP integration", () => {
-  test("serves all five endpoints with the frozen shapes and safe argv", async () => {
+  test("serves health, state, output, and keys with the frozen shapes and safe argv", async () => {
     const { baseUrl, cli, engine } = startTestServer();
 
     const health = await fetch(`${baseUrl}/health`);
@@ -167,14 +189,6 @@ describe("sidecar HTTP integration", () => {
       text: "output:w1:p1",
     });
 
-    const prompt = await fetch(`${baseUrl}/agent/w1%3Ap1/prompt`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text: "check status" }),
-    });
-    expect(prompt.status).toBe(200);
-    expect(await jsonResponse(prompt)).toEqual({ ok: true });
-
     const keys = await fetch(`${baseUrl}/agent/w1%3Ap1/keys`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -195,7 +209,6 @@ describe("sidecar HTTP integration", () => {
         "--format",
         "ansi",
       ],
-      ["agent", "prompt", "w1:p1", "check status"],
       ["agent", "send-keys", "w1:p1", "esc", "ctrl+c"],
     ]);
   });
@@ -203,7 +216,7 @@ describe("sidecar HTTP integration", () => {
   test("maps bad input, missing targets, and CLI failures to 400, 404, and 502", async () => {
     const { baseUrl } = startTestServer();
 
-    const malformed = await fetch(`${baseUrl}/agent/pi/prompt`, {
+    const malformed = await fetch(`${baseUrl}/pane/pi/input`, {
       method: "POST",
       body: "{",
     });
@@ -219,18 +232,25 @@ describe("sidecar HTTP integration", () => {
 
     const unknownRoute = await fetch(`${baseUrl}/unknown`);
     expect(unknownRoute.status).toBe(404);
+
+    const removedPrompt = await fetch(`${baseUrl}/agent/pi/prompt`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "gone" }),
+    });
+    expect(removedPrompt.status).toBe(404);
   });
 
-  test("rejects oversized bodies, prompt text, key arrays, key values, and line counts", async () => {
+  test("rejects oversized bodies, input text, key arrays, key values, and line counts", async () => {
     const { baseUrl, cli } = startTestServer();
     const requests = [
-      fetch(`${baseUrl}/agent/pi/prompt`, {
+      fetch(`${baseUrl}/pane/pi/input`, {
         method: "POST",
         body: JSON.stringify({ text: "x".repeat(MAX_REQUEST_BODY_BYTES) }),
       }),
-      fetch(`${baseUrl}/agent/pi/prompt`, {
+      fetch(`${baseUrl}/pane/pi/input`, {
         method: "POST",
-        body: JSON.stringify({ text: "x".repeat(MAX_PROMPT_TEXT_LENGTH + 1) }),
+        body: JSON.stringify({ text: "x".repeat(MAX_INPUT_TEXT_LENGTH + 1) }),
       }),
       fetch(`${baseUrl}/agent/pi/keys`, {
         method: "POST",
@@ -251,15 +271,15 @@ describe("sidecar HTTP integration", () => {
     expect(cli.calls).toHaveLength(0);
   });
 
-  test("rejects flag-like pane IDs, targets, prompt text, and keys before invoking Herdr", async () => {
+  test("rejects flag-like pane IDs, targets, input text, and keys before invoking Herdr", async () => {
     const { baseUrl, cli } = startTestServer();
     const requests = [
       fetch(`${baseUrl}/pane/${encodeURIComponent("--help")}/output`),
-      fetch(`${baseUrl}/agent/${encodeURIComponent("--help")}/prompt`, {
+      fetch(`${baseUrl}/pane/${encodeURIComponent("--help")}/input`, {
         method: "POST",
         body: JSON.stringify({ text: "safe" }),
       }),
-      fetch(`${baseUrl}/agent/pi/prompt`, {
+      fetch(`${baseUrl}/pane/pi/input`, {
         method: "POST",
         body: JSON.stringify({ text: "--help" }),
       }),
@@ -685,8 +705,8 @@ describe("sidecar WebSocket integration", () => {
     ]);
   });
 
-  test("production watch interval is 250ms, serialized, and does not overlap in-flight reads", async () => {
-    expect(DEFAULT_OUTPUT_INTERVAL_MS).toBe(250);
+  test("production watch interval is 100ms, serialized, and does not overlap in-flight reads", async () => {
+    expect(DEFAULT_OUTPUT_INTERVAL_MS).toBe(100);
 
     const cli = new FakeCli();
     cli.deferPaneReads = true;
@@ -714,8 +734,8 @@ describe("sidecar WebSocket integration", () => {
     cli.resolveNextRead("tick-1");
     await waitUntil(() => cli.pendingReads[0]?.paneId === "pane-fast", "second production read");
     const elapsed = Date.now() - t0;
-    expect(elapsed).toBeGreaterThanOrEqual(200);
-    expect(elapsed).toBeLessThan(450);
+    expect(elapsed).toBeGreaterThanOrEqual(70);
+    expect(elapsed).toBeLessThan(250);
     expect(cli.activeReads).toBe(1);
     expect(cli.maxActiveReads).toBe(1);
     cli.resolveNextRead("tick-2");
@@ -725,6 +745,104 @@ describe("sidecar WebSocket integration", () => {
       if (socket.readyState === WebSocket.CLOSED) resolve();
       else socket.addEventListener("close", () => resolve(), { once: true });
     });
+  });
+
+  test("pokes an immediate read after input and keys without waiting for the poll interval", async () => {
+    const { baseUrl, cli, engine } = startTestServer(new FakeCli(), 500);
+    engine.snapshot = agentSnapshot;
+    const { socket, messages } = await connectWebSocket(baseUrl);
+    send(socket, { type: "watch", paneId: "w1:p1", lines: 5 });
+    await waitUntil(
+      () => messages.some((message) => message.type === "output" && message.paneId === "w1:p1"),
+      "initial watch output",
+    );
+
+    const readsAfterWatch = paneReads(cli).length;
+    const inputStarted = Date.now();
+    const input = await fetch(`${baseUrl}/pane/w1%3Ap1/input`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "hello" }),
+    });
+    expect(input.status).toBe(200);
+    await waitUntil(() => paneReads(cli).length > readsAfterWatch, "input poke read");
+    expect(Date.now() - inputStarted).toBeLessThan(80);
+    expect(paneReads(cli).length).toBe(readsAfterWatch + 1);
+
+    const readsAfterInput = paneReads(cli).length;
+    const keysStarted = Date.now();
+    const keys = await fetch(`${baseUrl}/agent/pi/keys`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ keys: ["enter"] }),
+    });
+    expect(keys.status).toBe(200);
+    await waitUntil(() => paneReads(cli).length > readsAfterInput, "keys poke read");
+    expect(Date.now() - keysStarted).toBeLessThan(80);
+    expect(paneReads(cli).length).toBe(readsAfterInput + 1);
+    socket.close();
+  });
+
+  test("coalesces pokes during an in-flight read to one follow-up", async () => {
+    const cli = new FakeCli();
+    cli.deferPaneReads = true;
+    const { baseUrl } = startTestServer(cli, 500);
+    const { socket } = await connectWebSocket(baseUrl);
+    send(socket, { type: "watch", paneId: "w1:p1", lines: 5 });
+    await waitUntil(() => cli.pendingReads[0]?.paneId === "w1:p1", "in-flight watch read");
+    expect(paneReads(cli)).toHaveLength(1);
+
+    for (let index = 0; index < 3; index += 1) {
+      const response = await fetch(`${baseUrl}/pane/w1%3Ap1/input`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text: `poke-${index}` }),
+      });
+      expect(response.status).toBe(200);
+    }
+    expect(cli.activeReads).toBe(1);
+    expect(cli.maxActiveReads).toBe(1);
+    expect(cli.pendingReads).toHaveLength(1);
+    expect(paneReads(cli)).toHaveLength(1);
+
+    cli.resolveNextRead("tick-1");
+    await waitUntil(() => cli.pendingReads[0]?.paneId === "w1:p1", "coalesced follow-up");
+    expect(paneReads(cli)).toHaveLength(2);
+    expect(cli.activeReads).toBe(1);
+    expect(cli.maxActiveReads).toBe(1);
+
+    cli.resolveNextRead("tick-2");
+    await waitUntil(() => cli.activeReads === 0, "follow-up completion");
+    await Bun.sleep(40);
+    expect(paneReads(cli)).toHaveLength(2);
+    expect(cli.pendingReads).toHaveLength(0);
+    socket.close();
+  });
+
+  test("does not poke a stale generation after unwatch", async () => {
+    const cli = new FakeCli();
+    cli.deferPaneReads = true;
+    const { baseUrl } = startTestServer(cli, 500);
+    const { socket } = await connectWebSocket(baseUrl);
+    send(socket, { type: "watch", paneId: "w1:p1", lines: 5 });
+    await waitUntil(() => cli.pendingReads[0]?.paneId === "w1:p1", "in-flight watch read");
+    send(socket, { type: "unwatch" });
+
+    const input = await fetch(`${baseUrl}/pane/w1%3Ap1/input`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "after-unwatch" }),
+    });
+    expect(input.status).toBe(200);
+    expect(paneReads(cli)).toHaveLength(1);
+    expect(cli.pendingReads).toHaveLength(1);
+
+    cli.resolveNextRead("stale");
+    await waitUntil(() => cli.activeReads === 0, "stale read completion");
+    await Bun.sleep(40);
+    expect(paneReads(cli)).toHaveLength(1);
+    expect(cli.pendingReads).toHaveLength(0);
+    socket.close();
   });
 });
 
