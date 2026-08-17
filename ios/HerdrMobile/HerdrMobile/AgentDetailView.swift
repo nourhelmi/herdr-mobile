@@ -1,24 +1,16 @@
 import SwiftUI
 import UIKit
 
-private enum AgentViewMode: String, CaseIterable {
-    case prompt
-    case terminal
-}
-
 struct AgentDetailView: View {
     @Environment(SessionController.self) private var session
     @Environment(\.dismiss) private var dismiss
     let agent: AgentSnapshot
 
-    @State private var mode = AgentViewMode.prompt
-    @State private var prompt = ""
     @State private var terminalBuffer = ""
     @State private var lastForwarded = ""
     @State private var inputRevision = 0
     @State private var inputTask: Task<Void, Never>?
     @State private var terminalWriteTask: Task<Void, Never>?
-    @State private var isSending = false
     @State private var actionError: String?
     @State private var isAcknowledging = false
     @State private var acknowledgementMessage: String?
@@ -54,12 +46,8 @@ struct AgentDetailView: View {
             )
             Rectangle().fill(HerdrInk.rule).frame(height: 1)
             AgentInputDock(
-                mode: $mode,
-                prompt: $prompt,
                 terminalBuffer: $terminalBuffer,
-                isSending: isSending,
                 errorMessage: actionError ?? session.lastError,
-                onPromptSend: submitPrompt,
                 onKey: { key in Task { await handleKey(key) } },
                 onTerminalChange: scheduleTerminalForward
             )
@@ -104,12 +92,6 @@ struct AgentDetailView: View {
             if newState != "done" {
                 acknowledgementMessage = nil
             }
-        }
-        .onChange(of: mode) { _, newMode in
-            guard newMode != .terminal else { return }
-            inputRevision += 1
-            inputTask?.cancel()
-            terminalWriteTask?.cancel()
         }
         .onDisappear {
             inputRevision += 1
@@ -216,37 +198,13 @@ struct AgentDetailView: View {
         }
     }
 
-    private func submitPrompt() {
-        let text = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, !isSending else { return }
-        Task { await sendPrompt(text) }
-    }
-
-    private func sendPrompt(_ text: String) async {
-        guard text.count <= 16_000 else {
-            actionError = "Prompt exceeds 16000 characters"
-            return
-        }
-        isSending = true
-        defer { isSending = false }
-        do {
-            try await session.sendPrompt(target: live.paneId, text: text)
-            if prompt.trimmingCharacters(in: .whitespacesAndNewlines) == text {
-                prompt = ""
-            }
-            actionError = nil
-        } catch {
-            actionError = error.localizedDescription
-        }
-    }
-
     private func handleKey(_ key: String) async {
-        if mode == .terminal, key == "enter" {
+        if key == "enter" {
             await inputTask?.value
             inputRevision += 1
             terminalBuffer = ""
             lastForwarded = ""
-        } else if mode == .terminal, key == "esc" {
+        } else if key == "esc" {
             inputTask?.cancel()
             inputRevision += 1
             terminalBuffer = ""
@@ -424,95 +382,26 @@ private struct AgentMetadataRibbon<Accessory: View>: View {
 }
 
 private struct AgentInputDock: View {
-    @Binding var mode: AgentViewMode
-    @Binding var prompt: String
     @Binding var terminalBuffer: String
-    var isSending: Bool
     var errorMessage: String?
-    var onPromptSend: () -> Void
     var onKey: (String) -> Void
     var onTerminalChange: (String) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ErrorBanner(message: errorMessage)
-            QuickKeysBar(
-                enabled: !isSending,
-                includeEnter: true,
-                extended: mode == .terminal
-            ) { key in
+            QuickKeysBar(enabled: true, includeEnter: true, extended: true) { key in
                 onKey(key)
             }
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .bottom, spacing: 8) {
-                    AgentModeSelector(mode: $mode)
-                    composer
-                }
-                VStack(alignment: .leading, spacing: 8) {
-                    AgentModeSelector(mode: $mode)
-                    composer
-                }
-            }
-        }
-        .padding(12)
-        .background(HerdrInk.panel)
-    }
-
-    @ViewBuilder
-    private var composer: some View {
-        if mode == .prompt {
-            PromptComposer(text: $prompt, isSending: isSending, onSend: onPromptSend)
-        } else {
             PromptComposer(
                 text: $terminalBuffer,
-                isSending: isSending,
-                placeholder: "Type into the pane",
-                sendLabel: "RET",
-                fieldAccessibilityLabel: "Terminal input",
-                sendAccessibilityLabel: "Send enter",
                 onSend: { onKey("enter") }
             )
             .onChange(of: terminalBuffer) { _, newValue in
                 onTerminalChange(newValue)
             }
         }
-    }
-}
-
-private struct AgentModeSelector: View {
-    @Binding var mode: AgentViewMode
-
-    var body: some View {
-        HStack(spacing: 0) {
-            modeButton(.prompt, title: "PROMPT")
-            modeButton(.terminal, title: "LIVE")
-        }
-        .overlay(Rectangle().stroke(HerdrInk.rule, lineWidth: 1))
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Input mode")
-    }
-
-    private func modeButton(_ value: AgentViewMode, title: String) -> some View {
-        Button {
-            mode = value
-        } label: {
-            HStack(spacing: 4) {
-                if value == .terminal {
-                    Circle()
-                        .fill(mode == value ? HerdrInk.void : HerdrInk.phosphor)
-                        .frame(width: 5, height: 5)
-                }
-                Text(title)
-            }
-            .font(HerdrType.meta)
-            .foregroundStyle(mode == value ? HerdrInk.void : HerdrInk.mute)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .frame(minWidth: 56)
-            .background(mode == value ? (value == .terminal ? HerdrInk.phosphor : HerdrInk.paper) : HerdrInk.void)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(value == .prompt ? "Prompt mode" : "Live terminal mode")
-        .accessibilityAddTraits(mode == value ? .isSelected : [])
+        .padding(12)
+        .background(HerdrInk.panel)
     }
 }

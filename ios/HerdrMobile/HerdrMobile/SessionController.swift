@@ -93,10 +93,6 @@ final class SessionController {
         outputText = ""
     }
 
-    func sendPrompt(target: String, text: String) async throws {
-        try await client.sendPrompt(target: target, text: text)
-    }
-
     func sendKeys(target: String, keys: [String]) async throws {
         try await client.sendKeys(target: target, keys: keys)
     }

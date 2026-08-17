@@ -78,6 +78,10 @@ struct TerminalOutputView: View {
     var text: String
     var emptyMessage: String
 
+    @State private var attributed = AttributedString()
+    @State private var isEmpty = true
+    @State private var parsedSource: String?
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -88,7 +92,7 @@ struct TerminalOutputView: View {
                             .foregroundStyle(HerdrInk.mute)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     } else {
-                        Text(colored)
+                        Text(attributed)
                             .font(HerdrType.mono)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -98,10 +102,8 @@ struct TerminalOutputView: View {
                 .id("tail")
             }
             .background(HerdrInk.inset)
-            .onChange(of: text) {
-                proxy.scrollTo("tail", anchor: .bottom)
-            }
-            .onAppear {
+            .onChange(of: text, initial: true) { _, newText in
+                parseIfNeeded(newText)
                 proxy.scrollTo("tail", anchor: .bottom)
             }
         }
@@ -109,12 +111,15 @@ struct TerminalOutputView: View {
         .accessibilityLabel("Pane output")
     }
 
-    private var colored: AttributedString {
-        ANSIRenderer.attributed(text)
-    }
-
-    private var isEmpty: Bool {
-        ANSIStripper.displayText(text).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    /// One ANSI parse per distinct snapshot; emptiness is derived from the cached AttributedString.
+    private func parseIfNeeded(_ raw: String) {
+        guard parsedSource != raw else { return }
+        parsedSource = raw
+        let rendered = ANSIRenderer.attributed(raw)
+        attributed = rendered
+        isEmpty = String(rendered.characters)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .isEmpty
     }
 }
 
@@ -204,11 +209,11 @@ struct QuickKeysBar: View {
 
 struct PromptComposer: View {
     @Binding var text: String
-    var isSending: Bool
-    var placeholder = "Prompt the agent"
-    var sendLabel = "SEND"
-    var fieldAccessibilityLabel = "Prompt"
-    var sendAccessibilityLabel = "Send prompt"
+    var isSending = false
+    var placeholder = "Type into the pane"
+    var sendLabel = "RET"
+    var fieldAccessibilityLabel = "Terminal input"
+    var sendAccessibilityLabel = "Send enter"
     var onSend: () -> Void
 
     @FocusState private var isFocused: Bool

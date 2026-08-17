@@ -153,8 +153,8 @@ chip should prefer `display`.
 `watch` accepts optional `format`: `"text"` (v1 default) or `"ansi"`.
 Output frames echo that format. Clients that want terminal styling should watch
 `ansi` and render SGR locally. The iOS client requests `ansi` and uses the same
-ANSI-colored terminal renderer in PROMPT and LIVE; input mode changes input
-behavior only.
+ANSI-colored terminal renderer. Agent detail forwards live pane input and keys
+only; there is no prompt-mode HTTP path.
 
 ## v2 addendum
 

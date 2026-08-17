@@ -87,10 +87,6 @@ final class HerdrClient {
         ])
     }
 
-    func sendPrompt(target: String, text: String) async throws {
-        try await post(path: "/agent/\(Self.encodePath(target))/prompt", body: ["text": text])
-    }
-
     func sendKeys(target: String, keys: [String]) async throws {
         try await post(path: "/agent/\(Self.encodePath(target))/keys", body: ["keys": keys])
     }

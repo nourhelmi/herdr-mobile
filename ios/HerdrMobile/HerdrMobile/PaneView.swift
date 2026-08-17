@@ -5,8 +5,6 @@ struct PaneView: View {
     @Environment(\.dismiss) private var dismiss
     let pane: PaneSnapshot
 
-    @State private var prompt = ""
-    @State private var isSending = false
     @State private var actionError: String?
     @State private var showClosePane = false
     @State private var isClosing = false
@@ -24,18 +22,6 @@ struct PaneView: View {
                 text: session.outputPaneId == live.id ? session.outputText : "",
                 emptyMessage: "Watching \(live.id) — output pins to the tail."
             )
-            if live.isAgent {
-                Rectangle().fill(HerdrInk.rule).frame(height: 1)
-                VStack(alignment: .leading, spacing: 10) {
-                    ErrorBanner(message: actionError ?? session.lastError)
-                    QuickKeysBar(enabled: !isSending) { key in
-                        Task { await sendKeys([key]) }
-                    }
-                    PromptComposer(text: $prompt, isSending: isSending, onSend: submit)
-                }
-                .padding(12)
-                .background(HerdrInk.panel)
-            }
         }
         .background(HerdrInk.void)
         .navigationTitle(title)
@@ -98,40 +84,10 @@ struct PaneView: View {
                     .font(HerdrType.meta)
                     .foregroundStyle(HerdrInk.mute)
             }
+            ErrorBanner(message: actionError ?? session.lastError)
         }
         .padding(12)
         .background(HerdrInk.panel)
-    }
-
-    private func submit() {
-        let text = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, !isSending else { return }
-        Task { await sendPrompt(text) }
-    }
-
-    private func sendPrompt(_ text: String) async {
-        guard text.count <= 16_000 else {
-            actionError = "Prompt exceeds 16000 characters"
-            return
-        }
-        isSending = true
-        defer { isSending = false }
-        do {
-            try await session.sendPrompt(target: live.id, text: text)
-            prompt = ""
-            actionError = nil
-        } catch {
-            actionError = error.localizedDescription
-        }
-    }
-
-    private func sendKeys(_ keys: [String]) async {
-        do {
-            try await session.sendKeys(target: live.id, keys: keys)
-            actionError = nil
-        } catch {
-            actionError = error.localizedDescription
-        }
     }
 
     private func closePane(id: String) async {

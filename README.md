@@ -9,13 +9,13 @@ Requirements: Herdr 0.8.0, Bun, Xcode, and an iPhone simulator (or device).
 2. Build/install the app on an iPhone 16 simulator:
    `xcodebuild -project ios/HerdrMobile/HerdrMobile.xcodeproj -scheme HerdrMobile -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 16' build`
 3. In Settings, set the sidecar base URL (simulator host loopback: `http://127.0.0.1:8787`; a reachable Tailscale address can be used for a device), apply it, and probe `/health`.
-4. Home shows live agents/workspaces. Open an agent or pane to watch output; prompts and quick keys use HTTP, while output/state use WebSocket.
+4. Home shows live agents/workspaces. Open an agent to type into the pane (HTTP input/keys); bare panes are read-only. Output and state use WebSocket.
 
 The sidecar binds explicit loopback and, when available, Tailscale IPv4 listeners; it never binds `0.0.0.0`. Tailscale is the v1 network boundary.
 
 ## v1.1
 
-Additive protocol — see the [v1.1 addendum](PROTOCOL.md#v11-addendum). Home can create a workspace; an expanded workspace can create a tab. Agent detail defaults to PROMPT mode (ANSI-colored terminal output, native composer, model/repo/cost chips) and can toggle LIVE mode (the same output renderer + raw key forwarding). Input mode changes input behavior only.
+Additive protocol — see the [v1.1 addendum](PROTOCOL.md#v11-addendum). Home can create a workspace; an expanded workspace can create a tab. Agent detail is live-only: ANSI-colored terminal output, model/repo/cost chips, and a composer that forwards typed text plus quick keys. Bare panes stay read-only.
 
 ## v2
 
