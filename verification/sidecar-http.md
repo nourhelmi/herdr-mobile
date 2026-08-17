@@ -1,5 +1,8 @@
 # Sidecar HTTP verification
 
+> **HISTORICAL** — captured 2026-08-16 21:03Z when missing-target prompt still invoked `herdr agent prompt`.
+> Current contract: `verification/sidecar-http-current.md`. The prompt section below is not current behavior.
+
 Captured against the live read-only Herdr session. Action calls use a deliberately nonexistent target.
 
 ## GET health
@@ -35,7 +38,7 @@ Content-Length: 260
 {"paneId":"w4:p3","format":"text","text":" pi-lens  ●1E\n   · snapshot.test.ts  · notifier.test.ts  · types.ts  · snapshot.ts  · server.ts\n builder · openai-codex/gpt-5.6-sol · high · 🔀 Orchestrator · repo mode · 0 areas · 3 lanes · LSP ..."}
 ```
 
-## POST prompt (nonexistent target)
+## HISTORICAL — POST /agent/:target/prompt (removed CLI route)
 
 ```http
 HTTP/1.1 404 Not Found
@@ -45,6 +48,8 @@ Content-Length: 175
 
 {"ok":false,"error":"{\"error\":{\"code\":\"agent_not_found\",\"message\":\"agent target sidecar-verification-target-does-not-exist not found\"},\"id\":\"cli:agent:prompt\"}"}
 ```
+
+Current equivalent: `POST /agent/:target/prompt` is an unknown route → `404 {"ok":false,"error":"Not found"}`. Live writes use `POST /pane/:id/input`. See `sidecar-http-current.md`.
 
 ## POST keys (nonexistent target)
 

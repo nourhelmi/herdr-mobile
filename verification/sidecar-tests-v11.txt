@@ -1,3 +1,7 @@
+HISTORICAL v11 transcript — chrome tests and “prompt text” names are not current.
+Current suite (aed1917): 41 pass / 0 fail / 5 files; names say “input text”; chrome.ts deleted.
+See verification/sidecar-http-current.md.
+
 bun test v1.3.14 (0d9b296a)
 
 test/server.integration.test.ts:

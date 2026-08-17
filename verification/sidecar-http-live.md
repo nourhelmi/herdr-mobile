@@ -1,5 +1,8 @@
 # Live HTTP verification (bounded)
 
+> **HISTORICAL** — captured 2026-08-17 06:08Z when `POST /agent/:target/prompt` still existed.
+> Current contract: `verification/sidecar-http-current.md`. The prompt sections below are not current behavior.
+
 Target: <http://127.0.0.1:8787> (explicit loopback; no wildcard bind)
 
 ## GET /health
@@ -31,7 +34,7 @@ Content-Length: 44
 
 {"paneId":"w5:p1","format":"ansi","text":""}
 
-## POST /agent/w5%3Ap1/prompt
+## HISTORICAL — POST /agent/w5%3Ap1/prompt (removed; now generic 404)
 
 HTTP/1.1 200 OK
 Content-Type: application/json;charset=utf-8
@@ -49,7 +52,7 @@ Content-Length: 11
 
 {"ok":true}
 
-## GET /pane/w5%3Ap1/output after harmless prompt (watched safe output)
+## HISTORICAL — GET /pane/w5%3Ap1/output after the removed prompt route
 
 {"paneId":"w5:p1","format":"text","text":"\n\n╰─ ○ 5.2%/1M  󰔛 2m  󰧑 high ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯\n 🔀 Orchestrator · disabled (no taskplane config in workspace) · LSP Inactive · 🔌 MCP: 4 servers enabled"}
 

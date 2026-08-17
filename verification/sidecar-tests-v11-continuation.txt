@@ -1,3 +1,6 @@
+HISTORICAL v11 continuation — 27 pass / 6 files is not the current suite.
+Current (aed1917): 41 pass / 0 fail / 5 files. See verification/sidecar-http-current.md.
+
 Continuation verifier anchor: cd sidecar && bun test
 
  27 pass

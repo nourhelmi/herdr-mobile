@@ -2,6 +2,8 @@
 
 This is a bounded local runbook for the v1/v1.1 sidecar, v2 acknowledge, and simulator check. It does not upload artifacts.
 
+**Current contract (phase 2, `aed1917+`):** live input only. Agent Detail has no PROMPT/TERM selector. Writes are `POST /pane/:id/input` and `POST /agent/:target/keys`. `POST /agent/:target/prompt` is removed and returns the generic unknown-route 404 `{"ok":false,"error":"Not found"}`. See `PROTOCOL.md` and `verification/sidecar-http-current.md`.
+
 ## 1. Start the sidecar
 
 From the repository root:
@@ -73,4 +75,12 @@ curl -sS "http://127.0.0.1:8787/state"
 
 ## 6. Evidence locations
 
-Live bounded transcripts are in `verification/sidecar-http-live.md`, `verification/sidecar-ws-live.md`, and `verification/sidecar-ntfy-live.md`. Safe simulator screenshots are in `verification/screenshots/`; the run evidence manifest is stored in the assigned advisor run directory.
+**Current (release):** `verification/sidecar-http-current.md` — live-only input + explicit prompt-route 404, backed by `sidecar/test/server.integration.test.ts` at `aed1917` (`41 pass / 0 fail`). Protocol: `PROTOCOL.md`.
+
+**Historical (do not treat as current behavior):**
+- `verification/sidecar-http-live.md` — 2026-08-17 morning capture; includes a 200 from the removed `POST /agent/:target/prompt` route.
+- `verification/sidecar-http.md` — 2026-08-16 capture; missing-target still routed through `cli:agent:prompt`.
+- `verification/sidecar-tests-v11.txt` and `sidecar-tests-v11-continuation.txt` — v11-era suite (chrome tests, “prompt text” names). Current names say “input text”; chrome.ts is gone.
+- `verification/screenshots/agent-detail-prompt.png` and `agent-detail-terminal.png` — removed PROMPT/TERM selector. Other screenshots in that folder are still valid for home/settings/create/SGR.
+
+Still-current live transcripts: `verification/sidecar-ws-live.md`, `verification/sidecar-ntfy-live.md`. Run evidence manifests stay in the assigned advisor run directory.
