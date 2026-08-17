@@ -3,6 +3,9 @@ import UIKit
 
 /// CSI SGR → AttributedString. Non-SGR escapes are dropped. PUA glyphs are dropped.
 enum ANSIRenderer {
+    private static let maxSGRParameters = 64
+    private static let maxSGRScalars = 256
+
     static func attributed(_ raw: String, defaultColor: Color = HerdrInk.paper) -> AttributedString {
         var output = AttributedString()
         var style = Style()
@@ -157,14 +160,21 @@ enum ANSIRenderer {
         var cursor = index
         var token = ""
         var params: [Int] = []
+        var scalarCount = 0
         while cursor < raw.endIndex {
+            scalarCount += 1
+            guard scalarCount <= maxSGRScalars else { return nil }
             let value = raw[cursor].unicodeScalars.first?.value ?? 0
             if value >= 0x40 && value <= 0x7E {
-                if !token.isEmpty { params.append(Int(token) ?? 0) }
+                if !token.isEmpty {
+                    guard params.count < maxSGRParameters else { return nil }
+                    params.append(Int(token) ?? 0)
+                }
                 let end = raw.index(after: cursor)
                 return value == 0x6D ? (params, end) : nil
             }
             if raw[cursor] == ";" {
+                guard params.count < maxSGRParameters else { return nil }
                 params.append(Int(token) ?? 0)
                 token = ""
             } else if raw[cursor].isNumber {
@@ -201,12 +211,13 @@ enum ANSIRenderer {
     }
 
     private static func xterm256(_ index: Int) -> Color {
-        if index < 16 { return ansi16(index % 8, bright: index >= 8) }
-        if index >= 232 {
-            let value = Double(8 + (index - 232) * 10) / 255
+        let bounded = min(max(index, 0), 255)
+        if bounded < 16 { return ansi16(bounded % 8, bright: bounded >= 8) }
+        if bounded >= 232 {
+            let value = Double(8 + (bounded - 232) * 10) / 255
             return Color(red: value, green: value, blue: value)
         }
-        let cube = index - 16
+        let cube = bounded - 16
         let levels: [Double] = [0, 95, 135, 175, 215, 255].map { $0 / 255 }
         return Color(
             red: levels[cube / 36],

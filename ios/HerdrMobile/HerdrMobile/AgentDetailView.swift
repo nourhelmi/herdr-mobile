@@ -15,6 +15,7 @@ struct AgentDetailView: View {
     @State private var lastForwarded = ""
     @State private var inputRevision = 0
     @State private var inputTask: Task<Void, Never>?
+    @State private var terminalWriteTask: Task<Void, Never>?
     @State private var isSending = false
     @State private var actionError: String?
 
@@ -54,14 +55,14 @@ struct AgentDetailView: View {
                         inputRevision += 1
                         let revision = inputRevision
                         inputTask?.cancel()
-                        inputTask = Task {
+                        inputTask = Task { @MainActor in
                             do {
                                 try await Task.sleep(for: .milliseconds(120))
                             } catch {
                                 return
                             }
                             guard !Task.isCancelled, revision == inputRevision else { return }
-                            await forwardDelta(newValue)
+                            await queueTerminalInput(newValue, revision: revision)
                         }
                     }
                 }
@@ -77,6 +78,7 @@ struct AgentDetailView: View {
         .onAppear { session.watch(paneId: live.paneId) }
         .onDisappear {
             inputTask?.cancel()
+            terminalWriteTask?.cancel()
             session.unwatch()
         }
     }
@@ -204,6 +206,18 @@ struct AgentDetailView: View {
         }
     }
 
+    /// Serialize terminal writes so an older request cannot race a newer edit.
+    private func queueTerminalInput(_ newValue: String, revision: Int) async {
+        let previous = terminalWriteTask
+        let write = Task { @MainActor in
+            await previous?.value
+            guard !Task.isCancelled, revision == inputRevision else { return }
+            await forwardDelta(newValue)
+        }
+        terminalWriteTask = write
+        await write.value
+    }
+
     private func forwardDelta(_ newValue: String) async {
         let old = lastForwarded
         guard newValue != old else { return }
@@ -214,21 +228,9 @@ struct AgentDetailView: View {
                     try await session.sendPaneInput(paneId: live.paneId, text: delta)
                 }
             } else if old.hasPrefix(newValue) {
-                let count = min(old.count - newValue.count, 32)
-                if count > 0 {
-                    try await session.sendKeys(
-                        target: live.paneId,
-                        keys: Array(repeating: "backspace", count: count)
-                    )
-                }
+                try await eraseTerminalText(from: old, to: newValue)
             } else {
-                let wipe = min(old.count, 32)
-                if wipe > 0 {
-                    try await session.sendKeys(
-                        target: live.paneId,
-                        keys: Array(repeating: "backspace", count: wipe)
-                    )
-                }
+                try await eraseTerminalText(from: old, to: "")
                 if !newValue.isEmpty {
                     try await session.sendPaneInput(paneId: live.paneId, text: newValue)
                 }
@@ -237,6 +239,20 @@ struct AgentDetailView: View {
             actionError = nil
         } catch {
             actionError = error.localizedDescription
+        }
+    }
+
+    /// The sidecar accepts at most 32 keys per request; retain partial progress on a later failure.
+    private func eraseTerminalText(from old: String, to new: String) async throws {
+        var current = old
+        while current.count > new.count {
+            let batchSize = min(current.count - new.count, 32)
+            try await session.sendKeys(
+                target: live.paneId,
+                keys: Array(repeating: "backspace", count: batchSize)
+            )
+            current = String(current.dropLast(batchSize))
+            lastForwarded = current
         }
     }
 }
