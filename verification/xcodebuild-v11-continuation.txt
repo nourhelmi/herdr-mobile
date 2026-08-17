@@ -1,2 +1,2 @@
-Continuation verifier anchor: xcodebuild -project HerdrMobile.xcodeproj -scheme HerdrMobile -sdk iphonesimulator -configuration Debug -destination platform=iOS Simulator,id=D1DA4652-6380-4156-BDCB-6D7B052DAE24 build
+Continuation verifier anchor: xcodebuild -project HerdrMobile.xcodeproj -scheme HerdrMobile -sdk iphonesimulator -configuration Debug -destination platform=iOS Simulator,id=<simulator-udid> build
 ** BUILD SUCCEEDED **

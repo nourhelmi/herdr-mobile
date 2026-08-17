@@ -13,7 +13,7 @@ The combined state tree the sidecar builds from the Herdr CLI:
   "workspaces": [
     {
       "id": "w1",
-      "label": "ai-tutor",
+      "label": "sample-api",
       "number": 1,
       "focused": false,
       "agentStatus": "idle",                    // rollup from herdr
@@ -28,8 +28,8 @@ The combined state tree the sidecar builds from the Herdr CLI:
             {
               "id": "w1:p7",
               "label": null,                    // pane label or null
-              "title": "nour@mac:~/Dev/x",      // terminal_title_stripped
-              "cwd": "/Users/nour/Dev/x",
+              "title": "user@host:~/Dev/x",      // terminal_title_stripped
+              "cwd": "/Users/dev/x",
               "isAgent": false,
               "agent": null
             }
@@ -41,12 +41,12 @@ The combined state tree the sidecar builds from the Herdr CLI:
   "agents": [
     {
       "name": "pi",                            // agent kind label from herdr
-      "displayName": "π   claude-x   ai-tutor  $0.00",  // display_agent, may be null
+      "displayName": "π   claude-x   sample-api  $0.00",  // display_agent, may be null
       "paneId": "w1:pDF",
       "workspaceId": "w1",
       "tabId": "w1:tN",
       "state": "idle",                          // idle|working|blocked|done|unknown
-      "cwd": "/Users/nour/Dev/x",
+      "cwd": "/Users/dev/x",
       "paneLabel": "advisor-okay-so..."         // pane label or null
     }
   ]

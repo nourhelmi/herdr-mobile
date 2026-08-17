@@ -21,7 +21,7 @@ Herdr sidecar listening on http://127.0.0.1:0
 (pass) sidecar WebSocket integration > watch format ansi is passed through to pane read and output frames [12.36ms]
 (pass) binding validation > validates Tailscale IPv4 addresses and refuses wildcard hosts before binding [0.71ms]
 Herdr sidecar listening on http://127.0.0.1:0
-Herdr sidecar listening on http://100.115.104.23:0
+Herdr sidecar listening on http://100.64.0.2:0
 (pass) binding validation > rejects wildcard aliases, multicast, class-E, and IPv6; accepts loopback and unicast IPv4 [13.47ms]
 
 test/engine.test.ts:
@@ -33,11 +33,11 @@ Skipping workspace with unsafe workspace_id: --inject 15 |   text(args: string[]
 20 |     throw new TypeError(`${name} must not start with '-'`);
                    ^
 TypeError: workspace_id must not start with '-'
-      at assertSafePositional (/Users/nour/Dev/startups/herdr-mobile/sidecar/src/cli.ts:20:15)
-      at <anonymous> (/Users/nour/Dev/startups/herdr-mobile/sidecar/src/engine.ts:99:11)
+      at assertSafePositional (/Users/dev/herdr-mobile/sidecar/src/cli.ts:20:15)
+      at <anonymous> (/Users/dev/herdr-mobile/sidecar/src/engine.ts:99:11)
       at map (1:11)
-      at refreshStructure (/Users/nour/Dev/startups/herdr-mobile/sidecar/src/engine.ts:96:18)
-      at async <anonymous> (/Users/nour/Dev/startups/herdr-mobile/sidecar/src/engine.ts:60:22)
+      at refreshStructure (/Users/dev/herdr-mobile/sidecar/src/engine.ts:96:18)
+      at async <anonymous> (/Users/dev/herdr-mobile/sidecar/src/engine.ts:60:22)
 
 (pass) StateEngine positional validation > skips a flag-like workspace_id without spawning and continues polling others [1.67ms]
 

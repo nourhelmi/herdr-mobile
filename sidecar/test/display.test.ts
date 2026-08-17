@@ -43,7 +43,7 @@ describe("parseDisplayAgent", () => {
     const noBranch = envelope.result.agents.find((agent) => agent.pane_id === "w4:p1");
     expect(parseDisplayAgent(withBranch?.display_agent)).toMatchObject({
       model: "claude-fable-5",
-      repo: "ai-tutor",
+      repo: "sample-api",
       branch: "main",
       cost: "$0.00",
     });

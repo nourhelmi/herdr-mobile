@@ -765,7 +765,7 @@ describe("binding validation", () => {
     }
 
     expect(isSafeTailscaleIpv4("127.0.0.1")).toBe(true);
-    expect(isSafeTailscaleIpv4("100.115.104.23")).toBe(true);
+    expect(isSafeTailscaleIpv4("100.64.0.2")).toBe(true);
 
     const loopback = startSidecar({
       engine: engine as unknown as StateEngine,
@@ -781,7 +781,7 @@ describe("binding validation", () => {
         startSidecar({
           engine: engine as unknown as StateEngine,
           cli,
-          hosts: ["100.115.104.23"],
+          hosts: ["100.64.0.2"],
           port: 0,
         }),
       );
