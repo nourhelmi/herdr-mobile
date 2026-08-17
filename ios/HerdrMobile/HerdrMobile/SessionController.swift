@@ -94,6 +94,20 @@ final class SessionController {
         try await client.sendKeys(target: target, keys: keys)
     }
 
+    func sendPaneInput(paneId: String, text: String) async throws {
+        try await client.sendPaneInput(paneId: paneId, text: text)
+    }
+
+    func createWorkspace(label: String?) async throws {
+        try await client.createWorkspace(label: label)
+        await refresh()
+    }
+
+    func createTab(workspaceId: String, label: String?) async throws {
+        try await client.createTab(workspaceId: workspaceId, label: label)
+        await refresh()
+    }
+
     func probeHealth() async throws -> HealthResponse {
         let health = try await client.health()
         herdrOK = health.herdr

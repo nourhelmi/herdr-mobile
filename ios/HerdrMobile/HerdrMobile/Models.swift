@@ -33,9 +33,18 @@ struct PaneSnapshot: Codable, Equatable, Identifiable, Sendable {
     var agent: AgentSnapshot?
 }
 
+struct AgentDisplay: Codable, Equatable, Sendable {
+    var text: String
+    var model: String?
+    var repo: String?
+    var branch: String?
+    var cost: String?
+}
+
 struct AgentSnapshot: Codable, Equatable, Identifiable, Sendable {
     var name: String
     var displayName: String?
+    var display: AgentDisplay?
     var paneId: String
     var workspaceId: String
     var tabId: String
@@ -46,7 +55,8 @@ struct AgentSnapshot: Codable, Equatable, Identifiable, Sendable {
     var id: String { paneId }
 
     var displayTitle: String {
-        if let displayName, !displayName.isEmpty { return displayName }
+        if let text = display?.text, !text.isEmpty { return text }
+        if let displayName, !displayName.isEmpty { return UnicodeText.displayText(displayName) }
         if let paneLabel, !paneLabel.isEmpty { return "\(name) · \(paneLabel)" }
         return name
     }

@@ -15,6 +15,7 @@ final class HerdrClient {
     private var baseURL: URL?
     private var watchedPaneId: String?
     private var watchedLines = 200
+    private var watchedFormat = "ansi"
     private var backoff: TimeInterval = 1
 
     init() {
@@ -59,9 +60,10 @@ final class HerdrClient {
         onPhase?(.offline)
     }
 
-    func watch(paneId: String, lines: Int = 200) {
+    func watch(paneId: String, lines: Int = 200, format: String = "ansi") {
         watchedPaneId = paneId
         watchedLines = lines
+        watchedFormat = format
         Task { await sendWatchIfNeeded() }
     }
 
@@ -91,6 +93,22 @@ final class HerdrClient {
 
     func sendKeys(target: String, keys: [String]) async throws {
         try await post(path: "/agent/\(Self.encodePath(target))/keys", body: ["keys": keys])
+    }
+
+    func sendPaneInput(paneId: String, text: String) async throws {
+        try await post(path: "/pane/\(Self.encodePath(paneId))/input", body: ["text": text])
+    }
+
+    func createWorkspace(label: String?) async throws {
+        var body: [String: Any] = [:]
+        if let label, !label.isEmpty { body["label"] = label }
+        try await post(path: "/workspace", body: body)
+    }
+
+    func createTab(workspaceId: String, label: String?) async throws {
+        var body: [String: Any] = [:]
+        if let label, !label.isEmpty { body["label"] = label }
+        try await post(path: "/workspace/\(Self.encodePath(workspaceId))/tab", body: body)
     }
 
     /// Protocol: `:` in pane ids must be `%3A`.
@@ -178,7 +196,7 @@ final class HerdrClient {
 
     private func sendWatchIfNeeded() async {
         guard let paneId = watchedPaneId else { return }
-        await send(json: ["type": "watch", "paneId": paneId, "lines": watchedLines])
+        await send(json: ["type": "watch", "paneId": paneId, "lines": watchedLines, "format": watchedFormat])
     }
 
     private func sendUnwatch() async {

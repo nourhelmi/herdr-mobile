@@ -46,7 +46,7 @@ enum ANSIStripper {
     }
 
     /// ESC already consumed. Advances past CSI / OSC / nF / single-byte sequences.
-    private static func skipEscape(_ raw: String, from index: String.Index) -> String.Index {
+    static func skipEscape(_ raw: String, from index: String.Index) -> String.Index {
         guard index < raw.endIndex else { return index }
         switch raw[index] {
         case "[":
@@ -75,7 +75,7 @@ enum ANSIStripper {
     }
 
     /// OSC ends at BEL or ST (`ESC \`).
-    private static func skipOSC(_ raw: String, from index: String.Index) -> String.Index {
+    static func skipOSC(_ raw: String, from index: String.Index) -> String.Index {
         skipStringTerminated(raw, from: index)
     }
 

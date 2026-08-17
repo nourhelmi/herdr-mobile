@@ -77,19 +77,25 @@ struct StateBadge: View {
 struct TerminalOutputView: View {
     var text: String
     var emptyMessage: String
+    var colorize = false
+    var trimChrome = false
 
     var body: some View {
-        let display = ANSIStripper.displayText(text)
         ScrollViewReader { proxy in
             ScrollView {
                 Group {
-                    if display.isEmpty {
+                    if isEmpty {
                         Text(emptyMessage)
                             .font(HerdrType.meta)
                             .foregroundStyle(HerdrInk.mute)
                             .frame(maxWidth: .infinity, alignment: .leading)
+                    } else if colorize {
+                        Text(colored)
+                            .font(HerdrType.mono)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     } else {
-                        Text(display)
+                        Text(plain)
                             .font(HerdrType.mono)
                             .foregroundStyle(HerdrInk.paper)
                             .textSelection(.enabled)
@@ -100,7 +106,7 @@ struct TerminalOutputView: View {
                 .id("tail")
             }
             .background(HerdrInk.inset)
-            .onChange(of: display) {
+            .onChange(of: text) {
                 proxy.scrollTo("tail", anchor: .bottom)
             }
             .onAppear {
@@ -110,18 +116,60 @@ struct TerminalOutputView: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Pane output")
     }
+
+    private var plain: String {
+        let stripped = UnicodeText.sanitize(ANSIStripper.displayText(text))
+        return trimChrome ? ChromeTrimmer.trim(stripped) : stripped
+    }
+
+    private var colored: AttributedString {
+        ANSIRenderer.attributed(text)
+    }
+
+    private var isEmpty: Bool {
+        colorize ? ANSIStripper.displayText(text).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty : plain.isEmpty
+    }
+}
+
+struct StatusChip: View {
+    var label: String
+    var emphasis = false
+
+    var body: some View {
+        Text(label)
+            .font(HerdrType.meta)
+            .foregroundStyle(emphasis ? HerdrInk.phosphor : HerdrInk.paper)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(HerdrInk.inset)
+            .overlay(Rectangle().stroke(emphasis ? HerdrInk.phosphor.opacity(0.45) : HerdrInk.rule, lineWidth: 1))
+    }
 }
 
 struct QuickKeysBar: View {
     var enabled: Bool
+    var extended = false
     var onKey: (String) -> Void
 
     var body: some View {
-        HStack(spacing: 8) {
-            key("ESC", send: "esc")
-            key("^C", send: "ctrl+c")
-            key("RET", send: "enter")
-            Spacer()
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                key("ESC", send: "esc")
+                key("^C", send: "ctrl+c")
+                key("RET", send: "enter")
+                Spacer()
+            }
+            if extended {
+                HStack(spacing: 8) {
+                    key("TAB", send: "tab")
+                    key("BSP", send: "backspace")
+                    key("↑", send: "up")
+                    key("↓", send: "down")
+                    key("←", send: "left")
+                    key("→", send: "right")
+                    Spacer()
+                }
+            }
         }
     }
 
@@ -146,6 +194,12 @@ struct QuickKeysBar: View {
         case "esc": return "Send escape"
         case "ctrl+c": return "Send control C"
         case "enter": return "Send enter"
+        case "tab": return "Send tab"
+        case "backspace": return "Send backspace"
+        case "up": return "Send up arrow"
+        case "down": return "Send down arrow"
+        case "left": return "Send left arrow"
+        case "right": return "Send right arrow"
         default: return "Send \(key)"
         }
     }
@@ -154,11 +208,13 @@ struct QuickKeysBar: View {
 struct PromptComposer: View {
     @Binding var text: String
     var isSending: Bool
+    var placeholder = "Prompt the agent"
+    var sendLabel = "SEND"
     var onSend: () -> Void
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            TextField("Prompt the agent", text: $text, axis: .vertical)
+            TextField(placeholder, text: $text, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(HerdrType.body)
                 .foregroundStyle(HerdrInk.paper)
@@ -170,7 +226,7 @@ struct PromptComposer: View {
                 .onSubmit(onSend)
                 .accessibilityLabel("Prompt")
             Button(action: onSend) {
-                Text(isSending ? "…" : "SEND")
+                Text(isSending ? "…" : sendLabel)
                     .font(HerdrType.key)
                     .foregroundStyle(HerdrInk.void)
                     .padding(.horizontal, 12)

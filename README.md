@@ -13,6 +13,10 @@ Requirements: Herdr 0.8.0, Bun, Xcode, and an iPhone simulator (or device).
 
 The sidecar binds explicit loopback and, when available, Tailscale IPv4 listeners; it never binds `0.0.0.0`. Tailscale is the v1 network boundary.
 
+## v1.1
+
+Additive protocol — see the [v1.1 addendum](PROTOCOL.md#v11-addendum). Home can create a workspace; an expanded workspace can create a tab. Agent detail defaults to Prompt mode (TUI chrome trimmed, native composer, model/repo/cost chips) and can toggle Terminal mode (full ANSI pane + raw key forwarding).
+
 ## v2 note
 
 An **Acknowledge** action should call `herdr agent focus` so done-state agents are marked seen; CLI reads alone do not mark them seen.

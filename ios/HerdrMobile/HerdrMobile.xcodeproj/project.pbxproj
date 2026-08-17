@@ -19,6 +19,9 @@
 		A1000000000000000000002A /* AgentDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000000A /* AgentDetailView.swift */; };
 		A1000000000000000000002B /* PaneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000000B /* PaneView.swift */; };
 		A1000000000000000000002C /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000000C /* SettingsView.swift */; };
+		A1000000000000000000002D /* UnicodeText.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000000F /* UnicodeText.swift */; };
+		A1000000000000000000002E /* ChromeTrimmer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000010 /* ChromeTrimmer.swift */; };
+		A1000000000000000000002F /* ANSIRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000011 /* ANSIRenderer.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -34,6 +37,9 @@
 		A1000000000000000000000A /* AgentDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentDetailView.swift; sourceTree = "<group>"; };
 		A1000000000000000000000B /* PaneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaneView.swift; sourceTree = "<group>"; };
 		A1000000000000000000000C /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		A1000000000000000000000F /* UnicodeText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnicodeText.swift; sourceTree = "<group>"; };
+		A10000000000000000000010 /* ChromeTrimmer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChromeTrimmer.swift; sourceTree = "<group>"; };
+		A10000000000000000000011 /* ANSIRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ANSIRenderer.swift; sourceTree = "<group>"; };
 		A1000000000000000000000D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A1000000000000000000000E /* HerdrMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HerdrMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -65,6 +71,9 @@
 				A10000000000000000000002 /* Theme.swift */,
 				A10000000000000000000003 /* Models.swift */,
 				A10000000000000000000004 /* ANSIStripper.swift */,
+				A1000000000000000000000F /* UnicodeText.swift */,
+				A10000000000000000000010 /* ChromeTrimmer.swift */,
+				A10000000000000000000011 /* ANSIRenderer.swift */,
 				A10000000000000000000005 /* SettingsStore.swift */,
 				A10000000000000000000006 /* HerdrClient.swift */,
 				A10000000000000000000007 /* SessionController.swift */,
@@ -157,6 +166,9 @@
 				A10000000000000000000022 /* Theme.swift in Sources */,
 				A10000000000000000000023 /* Models.swift in Sources */,
 				A10000000000000000000024 /* ANSIStripper.swift in Sources */,
+				A1000000000000000000002D /* UnicodeText.swift in Sources */,
+				A1000000000000000000002E /* ChromeTrimmer.swift in Sources */,
+				A1000000000000000000002F /* ANSIRenderer.swift in Sources */,
 				A10000000000000000000025 /* SettingsStore.swift in Sources */,
 				A10000000000000000000026 /* HerdrClient.swift in Sources */,
 				A10000000000000000000027 /* SessionController.swift in Sources */,

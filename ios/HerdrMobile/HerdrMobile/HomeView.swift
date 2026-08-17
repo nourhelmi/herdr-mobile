@@ -2,6 +2,12 @@ import SwiftUI
 
 struct HomeView: View {
     @Environment(SessionController.self) private var session
+    @State private var showNewWorkspace = false
+    @State private var workspaceLabel = ""
+    @State private var showNewTab = false
+    @State private var tabWorkspace: WorkspaceSnapshot?
+    @State private var tabLabel = ""
+    @State private var createError: String?
 
     var body: some View {
         List {
@@ -49,6 +55,31 @@ struct HomeView: View {
                         .accessibilityLabel("Settings")
                 }
             }
+        }
+        .alert("New workspace", isPresented: $showNewWorkspace) {
+            TextField("Label (optional)", text: $workspaceLabel)
+            Button("Create") { Task { await createWorkspace() } }
+            Button("Cancel", role: .cancel) { workspaceLabel = "" }
+        } message: {
+            Text("128 characters max. Labels may not start with -.")
+        }
+        .alert("New tab", isPresented: $showNewTab) {
+            TextField("Label (optional)", text: $tabLabel)
+            Button("Create") { Task { await createTab() } }
+            Button("Cancel", role: .cancel) {
+                tabLabel = ""
+                tabWorkspace = nil
+            }
+        } message: {
+            Text(tabWorkspace.map { "In \($0.label). 128 characters max." } ?? "128 characters max.")
+        }
+        .alert("Create failed", isPresented: Binding(
+            get: { createError != nil },
+            set: { if !$0 { createError = nil } }
+        )) {
+            Button("OK", role: .cancel) { createError = nil }
+        } message: {
+            Text(createError ?? "")
         }
     }
 
@@ -106,6 +137,18 @@ struct HomeView: View {
                             }
                             .listRowBackground(HerdrInk.panel)
                         }
+                        Button {
+                            tabWorkspace = workspace
+                            tabLabel = ""
+                            showNewTab = true
+                        } label: {
+                            Text("+ tab")
+                                .font(HerdrType.meta)
+                                .foregroundStyle(HerdrInk.phosphor)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .listRowBackground(HerdrInk.inset)
+                        .accessibilityLabel("Create tab in \(workspace.label)")
                     } label: {
                         workspaceRow(workspace)
                     }
@@ -114,7 +157,17 @@ struct HomeView: View {
                 }
             }
         } header: {
-            sectionLabel("Workspaces")
+            HStack {
+                sectionLabel("Workspaces")
+                Spacer()
+                Button("NEW") {
+                    workspaceLabel = ""
+                    showNewWorkspace = true
+                }
+                .font(HerdrType.meta)
+                .foregroundStyle(HerdrInk.phosphor)
+                .accessibilityLabel("Create workspace")
+            }
         }
     }
 
@@ -229,5 +282,39 @@ struct HomeView: View {
         .padding(.vertical, 12)
         .listRowBackground(HerdrInk.panel)
         .accessibilityElement(children: .combine)
+    }
+
+    private func createWorkspace() async {
+        do {
+            let label = try validatedLabel(workspaceLabel)
+            try await session.createWorkspace(label: label)
+            workspaceLabel = ""
+        } catch {
+            createError = error.localizedDescription
+        }
+    }
+
+    private func createTab() async {
+        guard let workspace = tabWorkspace else { return }
+        do {
+            let label = try validatedLabel(tabLabel)
+            try await session.createTab(workspaceId: workspace.id, label: label)
+            tabLabel = ""
+            tabWorkspace = nil
+        } catch {
+            createError = error.localizedDescription
+        }
+    }
+
+    private func validatedLabel(_ raw: String) throws -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return nil }
+        if trimmed.count > 128 {
+            throw HerdrClientError(message: "label must not exceed 128 characters")
+        }
+        if trimmed.hasPrefix("-") {
+            throw HerdrClientError(message: "label must not start with '-'")
+        }
+        return trimmed
     }
 }

@@ -19,7 +19,8 @@ struct PaneView: View {
             Rectangle().fill(HerdrInk.rule).frame(height: 1)
             TerminalOutputView(
                 text: session.outputPaneId == live.id ? session.outputText : "",
-                emptyMessage: "Watching \(live.id) — output pins to the tail."
+                emptyMessage: "Watching \(live.id) — output pins to the tail.",
+                colorize: true
             )
             if live.isAgent {
                 Rectangle().fill(HerdrInk.rule).frame(height: 1)
