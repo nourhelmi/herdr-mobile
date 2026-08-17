@@ -42,7 +42,8 @@ struct AgentDetailView: View {
             }
             TerminalOutputView(
                 text: session.outputPaneId == live.paneId ? session.outputText : "",
-                emptyMessage: "Watching \(live.paneId) — output pins to the tail."
+                emptyMessage: "Watching \(live.paneId) — output pins to the tail.",
+                pendingEcho: terminalBuffer
             )
             Rectangle().fill(HerdrInk.rule).frame(height: 1)
             AgentInputDock(

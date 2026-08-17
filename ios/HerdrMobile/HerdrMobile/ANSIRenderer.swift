@@ -7,7 +7,12 @@ enum ANSIRenderer {
     private static let maxSGRScalars = 256
 
     static func attributed(_ raw: String, defaultColor: Color = HerdrInk.paper) -> AttributedString {
-        var output = AttributedString()
+        AttributedString(nsAttributed(raw, defaultColor: defaultColor))
+    }
+
+    /// TextKit path — skip the SwiftUI AttributedString wrap on the hot output tick.
+    static func nsAttributed(_ raw: String, defaultColor: Color = HerdrInk.paper) -> NSAttributedString {
+        let output = NSMutableAttributedString()
         var style = Style()
         var index = raw.startIndex
 
@@ -61,7 +66,7 @@ enum ANSIRenderer {
                 index = raw.index(after: index)
             }
             if !chunk.isEmpty {
-                output.append(attributed(chunk, style: style, defaultColor: defaultColor))
+                output.append(nsAttributed(chunk, style: style, defaultColor: defaultColor))
             }
         }
         return output
@@ -76,12 +81,12 @@ enum ANSIRenderer {
         var background: Color?
     }
 
-    private static func attributed(_ text: String, style: Style, defaultColor: Color) -> AttributedString {
-        // NS attributes avoid Swift 6 KeyPath-Sendable warnings on AttributedString setters.
+    private static func nsAttributed(_ text: String, style: Style, defaultColor: Color) -> NSAttributedString {
         var color = style.foreground ?? defaultColor
         if style.dim { color = color.opacity(0.65) }
         var attributes: [NSAttributedString.Key: Any] = [
             .foregroundColor: UIColor(color),
+            .font: UIFont.monospacedSystemFont(ofSize: 12, weight: .regular),
         ]
         if let background = style.background {
             attributes[.backgroundColor] = UIColor(background)
@@ -96,7 +101,7 @@ enum ANSIRenderer {
         if let descriptor = base.fontDescriptor.withSymbolicTraits(traits) {
             attributes[.font] = UIFont(descriptor: descriptor, size: 12)
         }
-        return AttributedString(NSAttributedString(string: text, attributes: attributes))
+        return NSAttributedString(string: text, attributes: attributes)
     }
 
     private static func applySGR(_ params: [Int], to style: inout Style) {

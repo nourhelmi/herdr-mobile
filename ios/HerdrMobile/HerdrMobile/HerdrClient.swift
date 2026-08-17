@@ -14,7 +14,8 @@ final class HerdrClient {
     private var runTask: Task<Void, Never>?
     private var baseURL: URL?
     private var watchedPaneId: String?
-    private var watchedLines = 200
+    /// Phone viewport, not 200-line scrollback. Pi TUI first paint was a full-screen SGR dump.
+    private var watchedLines = 48
     private var watchedFormat = "ansi"
     private var backoff: TimeInterval = 1
 
@@ -60,7 +61,7 @@ final class HerdrClient {
         onPhase?(.offline)
     }
 
-    func watch(paneId: String, lines: Int = 200, format: String = "ansi") {
+    func watch(paneId: String, lines: Int = 48, format: String = "ansi") {
         watchedPaneId = paneId
         watchedLines = lines
         watchedFormat = format

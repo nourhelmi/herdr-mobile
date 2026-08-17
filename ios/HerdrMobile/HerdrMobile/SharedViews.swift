@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ConnectionIndicator: View {
     var phase: ConnectionPhase
@@ -77,49 +78,139 @@ struct StateBadge: View {
 struct TerminalOutputView: View {
     var text: String
     var emptyMessage: String
-
-    @State private var attributed = AttributedString()
-    @State private var isEmpty = true
-    @State private var parsedSource: String?
+    /// Local composer text — shown instantly; sidecar echo still replaces the snapshot.
+    var pendingEcho: String = ""
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                Group {
-                    if isEmpty {
-                        Text(emptyMessage)
-                            .font(HerdrType.meta)
-                            .foregroundStyle(HerdrInk.mute)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
-                        Text(attributed)
-                            .font(HerdrType.mono)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-                .padding(12)
-                .id("tail")
-            }
+        // TextKit, not SwiftUI Text — full-snapshot ticks were relayouting one giant document.
+        TerminalTextKitView(text: text, emptyMessage: emptyMessage)
             .background(HerdrInk.inset)
-            .onChange(of: text, initial: true) { _, newText in
-                parseIfNeeded(newText)
-                proxy.scrollTo("tail", anchor: .bottom)
+            .overlay(alignment: .bottomLeading) {
+                if !pendingEcho.isEmpty {
+                    Text(pendingEcho)
+                        .font(HerdrType.mono)
+                        .foregroundStyle(HerdrInk.phosphor)
+                        .lineLimit(3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(HerdrInk.void.opacity(0.88))
+                        .accessibilityLabel("Pending input \(pendingEcho)")
+                }
             }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Pane output")
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Pane output")
+    }
+}
+
+/// Read-only UITextView: incremental layout, pin-to-tail without ScrollViewReader.
+private struct TerminalTextKitView: UIViewRepresentable {
+    var text: String
+    var emptyMessage: String
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
     }
 
-    /// One ANSI parse per distinct snapshot; emptiness is derived from the cached AttributedString.
-    private func parseIfNeeded(_ raw: String) {
-        guard parsedSource != raw else { return }
-        parsedSource = raw
-        let rendered = ANSIRenderer.attributed(raw)
-        attributed = rendered
-        isEmpty = String(rendered.characters)
+    func makeUIView(context: Context) -> UITextView {
+        let view = UITextView()
+        view.isEditable = false
+        view.isSelectable = true
+        view.backgroundColor = UIColor(HerdrInk.inset)
+        view.textContainerInset = UIEdgeInsets(top: 12, left: 8, bottom: 12, right: 8)
+        view.textContainer.lineFragmentPadding = 4
+        view.alwaysBounceVertical = true
+        view.indicatorStyle = .white
+        view.layoutManager.allowsNonContiguousLayout = true
+        view.delegate = context.coordinator
+        apply(text, to: view, coordinator: context.coordinator, forceScroll: true)
+        return view
+    }
+
+    func updateUIView(_ view: UITextView, context: Context) {
+        apply(text, to: view, coordinator: context.coordinator, forceScroll: false)
+    }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var lastSource: String?
+        var generation = 0
+        var pinnedToTail = true
+        var colorizeWork: DispatchWorkItem?
+
+        func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+            pinnedToTail = isNearTail(scrollView)
+        }
+
+        func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+            if !decelerate { pinnedToTail = isNearTail(scrollView) }
+        }
+
+        func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+            pinnedToTail = isNearTail(scrollView)
+        }
+
+        func isNearTail(_ scrollView: UIScrollView) -> Bool {
+            scrollView.contentOffset.y + scrollView.bounds.height >= scrollView.contentSize.height - 48
+        }
+    }
+
+    private func apply(
+        _ raw: String,
+        to view: UITextView,
+        coordinator: Coordinator,
+        forceScroll: Bool
+    ) {
+        guard coordinator.lastSource != raw else { return }
+        coordinator.lastSource = raw
+        coordinator.generation += 1
+        let generation = coordinator.generation
+        let emptyCopy = emptyMessage
+        let pin = forceScroll || coordinator.pinnedToTail
+        coordinator.colorizeWork?.cancel()
+
+        // First paint: stripped mono. Color runs wait — and are coalesced while typing.
+        let plain = ANSIStripper.displayText(raw)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-            .isEmpty
+        if plain.isEmpty {
+            view.attributedText = Self.placeholder(emptyCopy)
+        } else {
+            view.attributedText = NSAttributedString(
+                string: plain,
+                attributes: [
+                    .font: UIFont.monospacedSystemFont(ofSize: 12, weight: .regular),
+                    .foregroundColor: UIColor(HerdrInk.paper),
+                ]
+            )
+        }
+        if pin { Self.scrollToTail(view) }
+
+        guard !plain.isEmpty else { return }
+        let work = DispatchWorkItem {
+            let rendered = ANSIRenderer.nsAttributed(raw)
+            DispatchQueue.main.async {
+                guard coordinator.generation == generation else { return }
+                view.attributedText = rendered
+                if coordinator.pinnedToTail { Self.scrollToTail(view) }
+            }
+        }
+        coordinator.colorizeWork = work
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.12, execute: work)
+    }
+
+    private static func placeholder(_ message: String) -> NSAttributedString {
+        NSAttributedString(
+            string: message,
+            attributes: [
+                .font: UIFont.monospacedSystemFont(ofSize: 12, weight: .medium),
+                .foregroundColor: UIColor(HerdrInk.mute),
+            ]
+        )
+    }
+
+    private static func scrollToTail(_ view: UITextView) {
+        view.layoutIfNeeded()
+        let end = max(view.text.count - 1, 0)
+        view.scrollRangeToVisible(NSRange(location: end, length: 0))
     }
 }
 
@@ -216,23 +307,16 @@ struct PromptComposer: View {
     var sendAccessibilityLabel = "Send enter"
     var onSend: () -> Void
 
-    @FocusState private var isFocused: Bool
-
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            TextField(placeholder, text: $text, axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(HerdrType.body)
-                .foregroundStyle(HerdrInk.paper)
-                .lineLimit(1...6)
+            // UIKit field — SwiftUI TextField + FocusState + keyboard toolbar was the first-tap hitch.
+            TerminalComposerField(text: $text, placeholder: placeholder, onSubmit: onSend)
+                .frame(minHeight: 40)
                 .padding(10)
                 .background(HerdrInk.inset)
-                .overlay(Rectangle().stroke(isFocused ? HerdrInk.phosphor.opacity(0.45) : HerdrInk.rule, lineWidth: 1))
-                .submitLabel(.send)
-                .focused($isFocused)
-                .onSubmit(sendAndKeepFocus)
+                .overlay(Rectangle().stroke(HerdrInk.rule, lineWidth: 1))
                 .accessibilityLabel(fieldAccessibilityLabel)
-            Button(action: sendAndKeepFocus) {
+            Button(action: onSend) {
                 Text(isSending ? "…" : sendLabel)
                     .font(HerdrType.key)
                     .foregroundStyle(HerdrInk.void)
@@ -244,26 +328,78 @@ struct PromptComposer: View {
             .disabled(!canSend)
             .accessibilityLabel(sendAccessibilityLabel)
         }
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") {
-                    isFocused = false
-                }
-                .font(HerdrType.key)
-                .accessibilityLabel("Dismiss keyboard")
-            }
-        }
     }
 
     private var canSend: Bool {
         !isSending && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// Send is discrete; Done is the only path that resigns first responder.
-    private func sendAndKeepFocus() {
-        onSend()
-        isFocused = true
+}
+
+/// Native UITextField so first keyboard doesn't rebuild a SwiftUI TextField + accessory.
+private struct TerminalComposerField: UIViewRepresentable {
+    @Binding var text: String
+    var placeholder: String
+    var onSubmit: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text, onSubmit: onSubmit)
+    }
+
+    func makeUIView(context: Context) -> UITextField {
+        let field = UITextField()
+        field.delegate = context.coordinator
+        field.font = UIFont.preferredFont(forTextStyle: .body)
+        field.textColor = UIColor(HerdrInk.paper)
+        field.tintColor = UIColor(HerdrInk.phosphor)
+        field.backgroundColor = .clear
+        field.borderStyle = .none
+        field.returnKeyType = .send
+        field.autocorrectionType = .no
+        field.autocapitalizationType = .none
+        field.spellCheckingType = .no
+        field.smartDashesType = .no
+        field.smartQuotesType = .no
+        field.smartInsertDeleteType = .no
+        field.attributedPlaceholder = NSAttributedString(
+            string: placeholder,
+            attributes: [.foregroundColor: UIColor(HerdrInk.mute)]
+        )
+        field.addTarget(context.coordinator, action: #selector(Coordinator.changed), for: .editingChanged)
+        field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return field
+    }
+
+    func updateUIView(_ field: UITextField, context: Context) {
+        context.coordinator.onSubmit = onSubmit
+        if field.text != text {
+            field.text = text
+        }
+        if field.placeholder != placeholder {
+            field.attributedPlaceholder = NSAttributedString(
+                string: placeholder,
+                attributes: [.foregroundColor: UIColor(HerdrInk.mute)]
+            )
+        }
+    }
+
+    final class Coordinator: NSObject, UITextFieldDelegate {
+        var text: Binding<String>
+        var onSubmit: () -> Void
+
+        init(text: Binding<String>, onSubmit: @escaping () -> Void) {
+            self.text = text
+            self.onSubmit = onSubmit
+        }
+
+        @objc func changed(_ field: UITextField) {
+            text.wrappedValue = field.text ?? ""
+        }
+
+        func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+            onSubmit()
+            return false
+        }
     }
 }
 
