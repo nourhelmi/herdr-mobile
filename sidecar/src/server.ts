@@ -26,6 +26,7 @@ export const MAX_KEYS_COUNT = 32;
 export const MAX_KEY_LENGTH = 128;
 export const MAX_OUTPUT_LINES = 2_000;
 export const MAX_LABEL_LENGTH = 128;
+export const DEFAULT_OUTPUT_INTERVAL_MS = 250;
 
 function json(value: unknown, status = 200): Response {
   return Response.json(value, { status });
@@ -350,7 +351,7 @@ export function startSidecar(options: {
   }
 
   const clients = new Set<ServerWebSocket<WebSocketData>>();
-  const outputIntervalMs = options.outputIntervalMs ?? 2_000;
+  const outputIntervalMs = options.outputIntervalMs ?? DEFAULT_OUTPUT_INTERVAL_MS;
 
   const isCurrentWatch = (ws: ServerWebSocket<WebSocketData>, watch: PaneWatch): boolean =>
     !ws.data.closed && ws.data.watch?.generation === watch.generation;

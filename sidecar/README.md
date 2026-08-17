@@ -41,7 +41,7 @@ Connect with `GET /ws`. Actions remain HTTP-only.
 | client → server | `watch` | Watch one pane, replacing the previous watch; output is pushed immediately |
 | client → server | `unwatch` | Stop output polling |
 
-The server polls watched output about every two seconds and sends WebSocket protocol pings every 30 seconds. Exact fields are frozen in [`PROTOCOL.md`](../PROTOCOL.md#websocket--get-ws). v1.1 adds optional `watch.format` (`text` default, `ansi` for SGR clients), parsed `display` on agents, and HTTP create/input routes — see the v1.1 addendum.
+The server polls watched output about every 250ms and sends WebSocket protocol pings every 30 seconds. Exact fields are frozen in [`PROTOCOL.md`](../PROTOCOL.md#websocket--get-ws). v1.1 adds optional `watch.format` (`text` default, `ansi` for SGR clients), parsed `display` on agents, and HTTP create/input routes — see the v1.1 addendum.
 
 ## Test
 

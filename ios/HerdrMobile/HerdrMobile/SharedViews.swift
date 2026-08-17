@@ -77,8 +77,6 @@ struct StateBadge: View {
 struct TerminalOutputView: View {
     var text: String
     var emptyMessage: String
-    var colorize = false
-    var trimChrome = false
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -89,15 +87,9 @@ struct TerminalOutputView: View {
                             .font(HerdrType.meta)
                             .foregroundStyle(HerdrInk.mute)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                    } else if colorize {
+                    } else {
                         Text(colored)
                             .font(HerdrType.mono)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
-                        Text(plain)
-                            .font(HerdrType.mono)
-                            .foregroundStyle(HerdrInk.paper)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -117,17 +109,12 @@ struct TerminalOutputView: View {
         .accessibilityLabel("Pane output")
     }
 
-    private var plain: String {
-        let stripped = UnicodeText.sanitize(ANSIStripper.displayText(text))
-        return trimChrome ? ChromeTrimmer.trim(stripped) : stripped
-    }
-
     private var colored: AttributedString {
         ANSIRenderer.attributed(text)
     }
 
     private var isEmpty: Bool {
-        colorize ? ANSIStripper.displayText(text).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty : plain.isEmpty
+        ANSIStripper.displayText(text).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
 
@@ -146,34 +133,13 @@ struct StatusChip: View {
     }
 }
 
-struct QuickKeysBar: View {
+struct KeyCap: View {
+    var title: String
+    var send: String
     var enabled: Bool
-    var extended = false
     var onKey: (String) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                key("ESC", send: "esc")
-                key("^C", send: "ctrl+c")
-                key("RET", send: "enter")
-                Spacer()
-            }
-            if extended {
-                HStack(spacing: 8) {
-                    key("TAB", send: "tab")
-                    key("BSP", send: "backspace")
-                    key("↑", send: "up")
-                    key("↓", send: "down")
-                    key("←", send: "left")
-                    key("→", send: "right")
-                    Spacer()
-                }
-            }
-        }
-    }
-
-    private func key(_ title: String, send: String) -> some View {
         Button {
             onKey(send)
         } label: {
@@ -186,11 +152,11 @@ struct QuickKeysBar: View {
         }
         .disabled(!enabled)
         .buttonStyle(.plain)
-        .accessibilityLabel(accessibilityName(send))
+        .accessibilityLabel(accessibilityName)
     }
 
-    private func accessibilityName(_ key: String) -> String {
-        switch key {
+    private var accessibilityName: String {
+        switch send {
         case "esc": return "Send escape"
         case "ctrl+c": return "Send control C"
         case "enter": return "Send enter"
@@ -200,7 +166,38 @@ struct QuickKeysBar: View {
         case "down": return "Send down arrow"
         case "left": return "Send left arrow"
         case "right": return "Send right arrow"
-        default: return "Send \(key)"
+        default: return "Send \(send)"
+        }
+    }
+}
+
+struct QuickKeysBar: View {
+    var enabled: Bool
+    var includeEnter = true
+    var extended = false
+    var onKey: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                KeyCap(title: "ESC", send: "esc", enabled: enabled, onKey: onKey)
+                KeyCap(title: "^C", send: "ctrl+c", enabled: enabled, onKey: onKey)
+                if includeEnter {
+                    KeyCap(title: "RET", send: "enter", enabled: enabled, onKey: onKey)
+                }
+                Spacer()
+            }
+            if extended {
+                HStack(spacing: 8) {
+                    KeyCap(title: "TAB", send: "tab", enabled: enabled, onKey: onKey)
+                    KeyCap(title: "BSP", send: "backspace", enabled: enabled, onKey: onKey)
+                    KeyCap(title: "↑", send: "up", enabled: enabled, onKey: onKey)
+                    KeyCap(title: "↓", send: "down", enabled: enabled, onKey: onKey)
+                    KeyCap(title: "←", send: "left", enabled: enabled, onKey: onKey)
+                    KeyCap(title: "→", send: "right", enabled: enabled, onKey: onKey)
+                    Spacer()
+                }
+            }
         }
     }
 }
@@ -214,6 +211,8 @@ struct PromptComposer: View {
     var sendAccessibilityLabel = "Send prompt"
     var onSend: () -> Void
 
+    @FocusState private var isFocused: Bool
+
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
             TextField(placeholder, text: $text, axis: .vertical)
@@ -223,11 +222,12 @@ struct PromptComposer: View {
                 .lineLimit(1...6)
                 .padding(10)
                 .background(HerdrInk.inset)
-                .overlay(Rectangle().stroke(HerdrInk.rule, lineWidth: 1))
+                .overlay(Rectangle().stroke(isFocused ? HerdrInk.phosphor.opacity(0.45) : HerdrInk.rule, lineWidth: 1))
                 .submitLabel(.send)
-                .onSubmit(onSend)
+                .focused($isFocused)
+                .onSubmit(sendAndKeepFocus)
                 .accessibilityLabel(fieldAccessibilityLabel)
-            Button(action: onSend) {
+            Button(action: sendAndKeepFocus) {
                 Text(isSending ? "…" : sendLabel)
                     .font(HerdrType.key)
                     .foregroundStyle(HerdrInk.void)
@@ -239,10 +239,26 @@ struct PromptComposer: View {
             .disabled(!canSend)
             .accessibilityLabel(sendAccessibilityLabel)
         }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    isFocused = false
+                }
+                .font(HerdrType.key)
+                .accessibilityLabel("Dismiss keyboard")
+            }
+        }
     }
 
     private var canSend: Bool {
         !isSending && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Send is discrete; Done is the only path that resigns first responder.
+    private func sendAndKeepFocus() {
+        onSend()
+        isFocused = true
     }
 }
 

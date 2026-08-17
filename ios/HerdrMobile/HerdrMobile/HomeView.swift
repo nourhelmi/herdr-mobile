@@ -126,7 +126,7 @@ struct HomeView: View {
                             DisclosureGroup {
                                 ForEach(tab.panes) { pane in
                                     NavigationLink {
-                                        PaneView(pane: pane)
+                                        paneDestination(pane)
                                     } label: {
                                         paneRow(pane)
                                     }
@@ -251,6 +251,16 @@ struct HomeView: View {
                 .foregroundStyle(HerdrInk.mute)
         }
         .accessibilityLabel("Pane \(paneTitle(pane))\(pane.isAgent ? ", agent" : "")")
+    }
+
+    /// Agent-bearing panes share AgentDetailView; bare panes stay on PaneView.
+    @ViewBuilder
+    private func paneDestination(_ pane: PaneSnapshot) -> some View {
+        if let agent = pane.agent {
+            AgentDetailView(agent: agent)
+        } else {
+            PaneView(pane: pane)
+        }
     }
 
     private func paneTitle(_ pane: PaneSnapshot) -> String {
