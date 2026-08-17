@@ -262,6 +262,44 @@ struct PromptComposer: View {
     }
 }
 
+struct NoticeBanner: View {
+    var message: String
+    var onDismiss: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(message)
+                .font(HerdrType.meta)
+                .foregroundStyle(HerdrInk.tide)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button("OK", action: onDismiss)
+                .font(HerdrType.meta)
+                .foregroundStyle(HerdrInk.paper)
+                .accessibilityLabel("Dismiss notice")
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Notice \(message)")
+    }
+}
+
+enum CloseScopeCopy {
+    static func paneMessage(title: String, paneId: String) -> String {
+        "This closes pane \(title) (\(paneId))."
+    }
+
+    static func tabMessage(name: String, paneCount: Int) -> String {
+        "This closes tab \(name) and its \(count(paneCount, noun: "pane"))."
+    }
+
+    static func workspaceMessage(name: String, tabCount: Int, paneCount: Int) -> String {
+        "This closes workspace \(name), \(count(tabCount, noun: "tab")), and \(count(paneCount, noun: "pane"))."
+    }
+
+    private static func count(_ n: Int, noun: String) -> String {
+        n == 1 ? "1 \(noun)" : "\(n) \(noun)s"
+    }
+}
+
 struct ErrorBanner: View {
     var message: String?
 

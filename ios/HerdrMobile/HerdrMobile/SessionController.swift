@@ -9,6 +9,8 @@ final class SessionController {
     var phase: ConnectionPhase = .offline
     var herdrOK: Bool?
     var lastError: String?
+    /// Mild close-lag copy. Not an error; views must not route this through ErrorBanner.
+    var notice: String?
     var outputText = ""
     var outputPaneId: String?
     var isRefreshing = false
@@ -111,6 +113,58 @@ final class SessionController {
     func acknowledge(target: String) async throws {
         try await client.acknowledge(target: target)
         try await refreshSnapshot(after: "Agent was acknowledged")
+    }
+
+    func closePane(id: String) async throws -> CloseOutcome {
+        try await closeResource(phrase: "Pane was closed") {
+            try await client.closePane(id: id)
+        }
+    }
+
+    func closeTab(id: String) async throws -> CloseOutcome {
+        try await closeResource(phrase: "Tab was closed") {
+            try await client.closeTab(id: id)
+        }
+    }
+
+    func closeWorkspace(id: String) async throws -> CloseOutcome {
+        try await closeResource(phrase: "Workspace was closed") {
+            try await client.closeWorkspace(id: id)
+        }
+    }
+
+    func clearNotice() {
+        notice = nil
+    }
+
+    /// Close argv is done (2xx or sidecar 502-was-closed). Always reload `/state`.
+    /// 502-was-closed and a failed client refresh are notices, not close failures.
+    private func closeResource(phrase: String, op: () async throws -> Void) async throws -> CloseOutcome {
+        var sidecarLagged = false
+        do {
+            try await op()
+        } catch let error as HerdrClientError where error.isClosedPartialSuccess {
+            sidecarLagged = true
+        }
+        let clientRefreshFailed = await reloadSnapshotAfterClose()
+        if sidecarLagged || clientRefreshFailed {
+            notice = clientRefreshFailed
+                ? "\(phrase), but the tree could not be reloaded. Pull to refresh."
+                : "\(phrase). Sidecar refresh lagged; tree reloaded."
+            return CloseOutcome(refreshLagged: true)
+        }
+        notice = nil
+        return CloseOutcome(refreshLagged: false)
+    }
+
+    private func reloadSnapshotAfterClose() async -> Bool {
+        do {
+            snapshot = try await client.fetchState()
+            lastError = nil
+            return false
+        } catch {
+            return true
+        }
     }
 
     /// Confirmed mutation already happened; a failed `/state` fetch is partial success.

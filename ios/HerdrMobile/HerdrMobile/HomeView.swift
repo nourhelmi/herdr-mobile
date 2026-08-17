@@ -8,6 +8,8 @@ struct HomeView: View {
     @State private var tabWorkspace: WorkspaceSnapshot?
     @State private var tabLabel = ""
     @State private var createError: String?
+    @State private var pendingClose: PendingClose?
+    @State private var closeError: String?
 
     var body: some View {
         List {
@@ -30,6 +32,7 @@ struct HomeView: View {
                     )
                 }
             } else {
+                noticeSection
                 agentsSection
                 workspaceSection
             }
@@ -80,6 +83,42 @@ struct HomeView: View {
             Button("OK", role: .cancel) { createError = nil }
         } message: {
             Text(createError ?? "")
+        }
+        .alert("Close failed", isPresented: Binding(
+            get: { closeError != nil },
+            set: { if !$0 { closeError = nil } }
+        )) {
+            Button("OK", role: .cancel) { closeError = nil }
+        } message: {
+            Text(closeError ?? "")
+        }
+        .confirmationDialog(
+            pendingCloseTitle,
+            isPresented: Binding(
+                get: { pendingClose != nil },
+                set: { if !$0 { pendingClose = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button(pendingCloseConfirmTitle, role: .destructive) {
+                Task { await confirmClose() }
+            }
+            Button("Cancel", role: .cancel) { pendingClose = nil }
+        } message: {
+            Text(pendingCloseMessage)
+        }
+    }
+
+    @ViewBuilder
+    private var noticeSection: some View {
+        if let notice = session.notice, !notice.isEmpty {
+            Section {
+                NoticeBanner(message: notice) {
+                    session.clearNotice()
+                }
+                .listRowBackground(HerdrInk.panel)
+                .listRowSeparatorTint(HerdrInk.rule)
+            }
         }
     }
 
@@ -136,6 +175,9 @@ struct HomeView: View {
                                 tabRow(tab)
                             }
                             .listRowBackground(HerdrInk.panel)
+                            .closeActions("Close Tab…") {
+                                pendingClose = .tab(tab)
+                            }
                         }
                         Button {
                             tabWorkspace = workspace
@@ -154,6 +196,9 @@ struct HomeView: View {
                     }
                     .listRowBackground(HerdrInk.panel)
                     .listRowSeparatorTint(HerdrInk.rule)
+                    .closeActions("Close Workspace…") {
+                        pendingClose = .workspace(workspace)
+                    }
                 }
             }
         } header: {
@@ -326,5 +371,81 @@ struct HomeView: View {
             throw HerdrClientError(message: "label must not start with '-'")
         }
         return trimmed
+    }
+}
+
+private enum PendingClose: Identifiable {
+    case tab(TabSnapshot)
+    case workspace(WorkspaceSnapshot)
+
+    var id: String {
+        switch self {
+        case .tab(let tab): return "tab:\(tab.id)"
+        case .workspace(let workspace): return "workspace:\(workspace.id)"
+        }
+    }
+}
+
+private extension HomeView {
+    var pendingCloseTitle: String {
+        switch pendingClose {
+        case .tab: return "Close Tab?"
+        case .workspace: return "Close Workspace?"
+        case nil: return "Close?"
+        }
+    }
+
+    var pendingCloseConfirmTitle: String {
+        switch pendingClose {
+        case .tab: return "Close Tab"
+        case .workspace: return "Close Workspace"
+        case nil: return "Close"
+        }
+    }
+
+    var pendingCloseMessage: String {
+        switch pendingClose {
+        case .tab(let tab):
+            return CloseScopeCopy.tabMessage(name: tab.label, paneCount: tab.panes.count)
+        case .workspace(let workspace):
+            let panes = workspace.tabs.reduce(0) { $0 + $1.panes.count }
+            return CloseScopeCopy.workspaceMessage(
+                name: workspace.label,
+                tabCount: workspace.tabs.count,
+                paneCount: panes
+            )
+        case nil:
+            return ""
+        }
+    }
+
+    func confirmClose() async {
+        let pending = pendingClose
+        pendingClose = nil
+        do {
+            switch pending {
+            case .tab(let tab):
+                _ = try await session.closeTab(id: tab.id)
+            case .workspace(let workspace):
+                _ = try await session.closeWorkspace(id: workspace.id)
+            case nil:
+                return
+            }
+            closeError = nil
+        } catch {
+            closeError = error.localizedDescription
+        }
+    }
+}
+
+private extension View {
+    /// Swipe and context menu both stage a confirm; they never close unconfirmed.
+    func closeActions(_ title: String, stage: @escaping () -> Void) -> some View {
+        contextMenu {
+            Button(title, role: .destructive, action: stage)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(title, role: .destructive, action: stage)
+        }
     }
 }

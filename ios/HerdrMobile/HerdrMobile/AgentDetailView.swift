@@ -8,6 +8,7 @@ private enum AgentViewMode: String, CaseIterable {
 
 struct AgentDetailView: View {
     @Environment(SessionController.self) private var session
+    @Environment(\.dismiss) private var dismiss
     let agent: AgentSnapshot
 
     @State private var mode = AgentViewMode.prompt
@@ -21,6 +22,8 @@ struct AgentDetailView: View {
     @State private var actionError: String?
     @State private var isAcknowledging = false
     @State private var acknowledgementMessage: String?
+    @State private var showClosePane = false
+    @State private var isClosing = false
 
     private var live: AgentSnapshot {
         session.snapshot?.agents.first { $0.paneId == agent.paneId } ?? agent
@@ -70,6 +73,30 @@ struct AgentDetailView: View {
             ToolbarItem(placement: .principal) {
                 AgentNavIdentity(title: live.displayTitle, state: live.state, paneId: live.paneId)
             }
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    if canInterrupt {
+                        Button("Interrupt") {
+                            Task { await interrupt() }
+                        }
+                    }
+                    Button("Close Pane…", role: .destructive) {
+                        showClosePane = true
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .foregroundStyle(HerdrInk.paper)
+                        .accessibilityLabel("Agent actions")
+                }
+            }
+        }
+        .confirmationDialog("Close Pane?", isPresented: $showClosePane, titleVisibility: .visible) {
+            Button("Close Pane", role: .destructive) {
+                Task { await closePane() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(CloseScopeCopy.paneMessage(title: live.displayTitle, paneId: live.paneId))
         }
         .onAppear { session.watch(paneId: live.paneId) }
         .onChange(of: live.state) { _, newState in
@@ -89,6 +116,12 @@ struct AgentDetailView: View {
             terminalWriteTask?.cancel()
             session.unwatch()
         }
+    }
+
+    /// Interrupt is non-destructive (ctrl+c, layout stays). Only while the agent is busy.
+    private var canInterrupt: Bool {
+        let state = live.state.lowercased()
+        return state == "working" || state == "running"
     }
 
     private var showsRibbon: Bool {
@@ -153,6 +186,32 @@ struct AgentDetailView: View {
 
     private func announce(_ message: String) {
         UIAccessibility.post(notification: .announcement, argument: message)
+    }
+
+    private func interrupt() async {
+        do {
+            try await session.sendKeys(target: live.paneId, keys: ["ctrl+c"])
+            actionError = nil
+            announce("Interrupted")
+        } catch {
+            actionError = error.localizedDescription
+            announce("Error, \(error.localizedDescription)")
+        }
+    }
+
+    private func closePane() async {
+        guard !isClosing else { return }
+        isClosing = true
+        defer { isClosing = false }
+        do {
+            _ = try await session.closePane(id: live.paneId)
+            actionError = nil
+            announce("Pane closed")
+            dismiss()
+        } catch {
+            actionError = error.localizedDescription
+            announce("Error, \(error.localizedDescription)")
+        }
     }
 
     private func submitPrompt() {

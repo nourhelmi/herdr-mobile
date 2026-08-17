@@ -79,6 +79,10 @@ struct OKResponse: Codable, Equatable, Sendable {
     var error: String?
 }
 
+struct CloseOutcome: Equatable, Sendable {
+    var refreshLagged: Bool
+}
+
 enum ServerEvent: Equatable, Sendable {
     case state(Snapshot)
     case output(paneId: String, text: String, format: String)
@@ -97,6 +101,11 @@ struct HerdrClientError: LocalizedError, Equatable {
     var message: String
 
     var errorDescription: String? { message }
+
+    /// Sidecar 502 after the close argv succeeded but its structure poll failed.
+    var isClosedPartialSuccess: Bool {
+        statusCode == 502 && message.localizedCaseInsensitiveContains("was closed")
+    }
 
     static func decode(_ data: Data, status: Int) -> HerdrClientError {
         if let body = try? JSONDecoder().decode(OKResponse.self, from: data),

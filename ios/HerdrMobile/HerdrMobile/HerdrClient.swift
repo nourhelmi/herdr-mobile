@@ -115,6 +115,18 @@ final class HerdrClient {
         try await post(path: "/agent/\(Self.encodePath(target))/acknowledge")
     }
 
+    func closePane(id: String) async throws {
+        try await delete(path: "/pane/\(Self.encodePath(id))")
+    }
+
+    func closeTab(id: String) async throws {
+        try await delete(path: "/tab/\(Self.encodePath(id))")
+    }
+
+    func closeWorkspace(id: String) async throws {
+        try await delete(path: "/workspace/\(Self.encodePath(id))")
+    }
+
     /// Protocol: `:` in pane ids must be `%3A`.
     static func encodePath(_ value: String) -> String {
         var allowed = CharacterSet.alphanumerics
@@ -233,6 +245,13 @@ final class HerdrClient {
     private func post(path: String) async throws {
         var request = try makeRequest(path: path)
         request.httpMethod = "POST"
+        let _: OKResponse = try await send(request)
+    }
+
+    /// Bodyless DELETE: no Content-Type and no `{}`.
+    private func delete(path: String) async throws {
+        var request = try makeRequest(path: path)
+        request.httpMethod = "DELETE"
         let _: OKResponse = try await send(request)
     }
 
