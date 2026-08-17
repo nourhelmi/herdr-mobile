@@ -87,7 +87,7 @@ JSON text frames, every message has `type`.
 | type | payload | when |
 | --- | --- | --- |
 | `state` | `{type:"state", state:<Snapshot>}` | on connect + on every detected diff |
-| `output` | `{type:"output", paneId, text, format:"text"}` | watched pane output changed (~2s poll) |
+| `output` | `{type:"output", paneId, text, format:"text"}` | watched pane output changed (~250ms poll) |
 | `error` | `{type:"error", message}` | bad client message or watch failure |
 
 ### Client → server
@@ -145,8 +145,10 @@ chip should prefer `display`.
 ### WebSocket
 
 `watch` accepts optional `format`: `"text"` (v1 default) or `"ansi"`.
-Output frames echo that format. Terminal-mode clients should watch `ansi`
-and render SGR locally; Prompt mode strips + trims Pi TUI chrome on device.
+Output frames echo that format. Clients that want terminal styling should watch
+`ansi` and render SGR locally. The iOS client requests `ansi` and uses the same
+ANSI-colored terminal renderer in PROMPT and LIVE; input mode changes input
+behavior only.
 
 ## v2 addendum
 

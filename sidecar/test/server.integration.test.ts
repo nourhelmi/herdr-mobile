@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { CliError, type HerdrCli } from "../src/cli";
 import type { StateEngine } from "../src/engine";
 import {
+  DEFAULT_OUTPUT_INTERVAL_MS,
   isSafeTailscaleIpv4,
   MAX_KEYS_COUNT,
   MAX_KEY_LENGTH,
@@ -528,6 +529,48 @@ describe("sidecar WebSocket integration", () => {
       "--format",
       "ansi",
     ]);
+  });
+
+  test("production watch interval is 250ms, serialized, and does not overlap in-flight reads", async () => {
+    expect(DEFAULT_OUTPUT_INTERVAL_MS).toBe(250);
+
+    const cli = new FakeCli();
+    cli.deferPaneReads = true;
+    const engine = new FakeEngine();
+    const sidecar = startSidecar({
+      engine: engine as unknown as StateEngine,
+      cli,
+      hosts: ["127.0.0.1"],
+      port: 0,
+      pingIntervalMs: 60_000,
+    });
+    running.push(sidecar);
+    const baseUrl = `http://127.0.0.1:${sidecar.servers[0]!.port}`;
+    const { socket } = await connectWebSocket(baseUrl);
+
+    send(socket, { type: "watch", paneId: "pane-fast", lines: 5 });
+    await waitUntil(() => cli.pendingReads[0]?.paneId === "pane-fast", "first production read");
+    expect(cli.activeReads).toBe(1);
+
+    await Bun.sleep(DEFAULT_OUTPUT_INTERVAL_MS + 80);
+    expect(cli.pendingReads).toHaveLength(1);
+    expect(cli.maxActiveReads).toBe(1);
+
+    const t0 = Date.now();
+    cli.resolveNextRead("tick-1");
+    await waitUntil(() => cli.pendingReads[0]?.paneId === "pane-fast", "second production read");
+    const elapsed = Date.now() - t0;
+    expect(elapsed).toBeGreaterThanOrEqual(200);
+    expect(elapsed).toBeLessThan(450);
+    expect(cli.activeReads).toBe(1);
+    expect(cli.maxActiveReads).toBe(1);
+    cli.resolveNextRead("tick-2");
+    await waitUntil(() => cli.activeReads === 0, "second production read completion");
+    socket.close();
+    await new Promise<void>((resolve) => {
+      if (socket.readyState === WebSocket.CLOSED) resolve();
+      else socket.addEventListener("close", () => resolve(), { once: true });
+    });
   });
 });
 
