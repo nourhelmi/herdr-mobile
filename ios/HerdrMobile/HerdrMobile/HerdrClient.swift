@@ -214,8 +214,12 @@ final class HerdrClient {
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
             throw HerdrClientError(message: "Invalid sidecar URL")
         }
-        let prefix = components.path.hasSuffix("/") ? String(components.path.dropLast()) : components.path
-        components.path = prefix + path
+        let prefix = components.percentEncodedPath.hasSuffix("/")
+            ? String(components.percentEncodedPath.dropLast())
+            : components.percentEncodedPath
+        // `path` already contains encoded path components (for example `%3A` in pane IDs).
+        // Assign through percentEncodedPath so URLComponents does not escape the `%` again.
+        components.percentEncodedPath = prefix + path
         components.queryItems = query.isEmpty ? nil : query
         guard let url = components.url else {
             throw HerdrClientError(message: "Invalid sidecar URL")
