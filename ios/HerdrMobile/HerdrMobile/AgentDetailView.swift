@@ -206,6 +206,9 @@ struct AgentDetailView: View {
             lastForwarded = ""
         } else if key == "esc" {
             inputTask?.cancel()
+            // Finish an in-flight pane write before clearing its acknowledged prefix;
+            // otherwise the clear callback could issue stale backspaces after ESC.
+            await terminalWriteTask?.value
             inputRevision += 1
             terminalBuffer = ""
             lastForwarded = ""
