@@ -487,6 +487,22 @@ describe("sidecar close-controls HTTP integration", () => {
     expect(engine.pollCalls).toHaveLength(0);
   });
 
+  test("rejects malformed encoded close IDs before any CLI or poll call", async () => {
+    const { baseUrl, cli, engine } = startTestServer();
+    const requests = [
+      fetch(`${baseUrl}/pane/%E0%A4%A`, { method: "DELETE" }),
+      fetch(`${baseUrl}/tab/%E0%A4%A`, { method: "DELETE" }),
+      fetch(`${baseUrl}/workspace/%E0%A4%A`, { method: "DELETE" }),
+    ];
+
+    for (const response of await Promise.all(requests)) {
+      expect(response.status).toBe(400);
+      expect(await jsonResponse(response)).toEqual({ ok: false, error: "Invalid URL encoding" });
+    }
+    expect(cli.calls).toHaveLength(0);
+    expect(engine.pollCalls).toHaveLength(0);
+  });
+
   test("maps missing close targets to 404 without polling", async () => {
     const { baseUrl, cli, engine } = startTestServer();
 
