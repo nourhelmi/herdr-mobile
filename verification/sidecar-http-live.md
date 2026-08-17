@@ -55,4 +55,4 @@ Content-Length: 11
 
 ## Listener binding
 
-Startup logged explicit listeners `127.0.0.1:8787` and `100.115.104.23:8787`; no `0.0.0.0` listener was observed.
+Startup logged explicit listeners `127.0.0.1:8787` and `100.64.0.2:8787`; no `0.0.0.0` listener was observed.

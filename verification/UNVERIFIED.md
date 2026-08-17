@@ -19,13 +19,13 @@ Use the real local Herdr 0.8.0 session. The sidecar prints its topic and binds `
 The verifier used the unique non-sensitive topic:
 
 ```text
-herdrmobilecheck202608170607023376
+<ntfy-topic>
 ```
 
 The sidecar prints the configured topic at startup. To publish a bounded health message manually:
 
 ```sh
-curl -sS -X POST "https://ntfy.sh/herdrmobilecheck202608170607023376" \
+curl -sS -X POST "https://ntfy.sh/<ntfy-topic>" \
   -H 'Title: Herdr Mobile verifier' \
   --data 'Herdr Mobile verifier live publish 202608170607023376'
 ```
@@ -33,7 +33,7 @@ curl -sS -X POST "https://ntfy.sh/herdrmobilecheck202608170607023376" \
 ## 3. Boot/build/install the iPhone 16 simulator
 
 ```sh
-UDID=D1DA4652-6380-4156-BDCB-6D7B052DAE24
+UDID=<simulator-udid>
 xcrun simctl boot "$UDID"
 xcrun simctl bootstatus "$UDID" -b
 xcodebuild -project ios/HerdrMobile/HerdrMobile.xcodeproj \

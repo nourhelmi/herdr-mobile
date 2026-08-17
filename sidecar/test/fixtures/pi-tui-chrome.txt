@@ -9,7 +9,7 @@
 ┃ 3│ Claims:                                                                                                                                                                                                  ┃
 ┃ 4│ - Exercised the real Herdr 0.8.0 session through a real Bun sidecar on `127.0.0.1:8787` using only disposable workspace `w5` / pane `w5:p1`; no foreign pane or agent was mutated.                       ┃
 ┃ 5│ - Verified every documented HTTP operation with curl, the WebSocket watch/state/output/unwatch flow with a real Bun client, and one real ntfy.sh publish on unique topic                                 ┃
-┃ `herdrmobilecheck202608170607023376`.                                                                                                                                                                       ┃
+┃ `<ntfy-topic>`.                                                                                                                                                                       ┃
 ┃ … +38 more lines · ctrl+o to expand                                                                                                                                                                         ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 

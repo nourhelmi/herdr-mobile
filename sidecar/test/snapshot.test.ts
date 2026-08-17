@@ -48,7 +48,7 @@ describe("buildSnapshot", () => {
       paneLabel: labeledAgentPane!.label,
       display: {
         model: "claude-fable-5",
-        repo: "ai-tutor",
+        repo: "sample-api",
         branch: "main",
         cost: "$0.00",
       },
