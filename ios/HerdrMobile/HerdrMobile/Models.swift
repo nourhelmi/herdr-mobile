@@ -79,10 +79,6 @@ struct OKResponse: Codable, Equatable, Sendable {
     var error: String?
 }
 
-struct CloseOutcome: Equatable, Sendable {
-    var refreshLagged: Bool
-}
-
 enum ServerEvent: Equatable, Sendable {
     case state(Snapshot)
     case output(paneId: String, text: String, format: String)

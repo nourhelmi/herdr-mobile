@@ -115,19 +115,19 @@ final class SessionController {
         try await refreshSnapshot(after: "Agent was acknowledged")
     }
 
-    func closePane(id: String) async throws -> CloseOutcome {
+    func closePane(id: String) async throws {
         try await closeResource(phrase: "Pane was closed") {
             try await client.closePane(id: id)
         }
     }
 
-    func closeTab(id: String) async throws -> CloseOutcome {
+    func closeTab(id: String) async throws {
         try await closeResource(phrase: "Tab was closed") {
             try await client.closeTab(id: id)
         }
     }
 
-    func closeWorkspace(id: String) async throws -> CloseOutcome {
+    func closeWorkspace(id: String) async throws {
         try await closeResource(phrase: "Workspace was closed") {
             try await client.closeWorkspace(id: id)
         }
@@ -139,7 +139,7 @@ final class SessionController {
 
     /// Close argv is done (2xx or sidecar 502-was-closed). Always reload `/state`.
     /// 502-was-closed and a failed client refresh are notices, not close failures.
-    private func closeResource(phrase: String, op: () async throws -> Void) async throws -> CloseOutcome {
+    private func closeResource(phrase: String, op: () async throws -> Void) async throws {
         var sidecarLagged = false
         do {
             try await op()
@@ -151,10 +151,9 @@ final class SessionController {
             notice = clientRefreshFailed
                 ? "\(phrase), but the tree could not be reloaded. Pull to refresh."
                 : "\(phrase). Sidecar refresh lagged; tree reloaded."
-            return CloseOutcome(refreshLagged: true)
+            return
         }
         notice = nil
-        return CloseOutcome(refreshLagged: false)
     }
 
     private func reloadSnapshotAfterClose() async -> Bool {

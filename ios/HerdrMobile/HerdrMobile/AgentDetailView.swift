@@ -189,6 +189,7 @@ struct AgentDetailView: View {
     }
 
     private func interrupt() async {
+        guard canInterrupt else { return }
         do {
             try await session.sendKeys(target: live.paneId, keys: ["ctrl+c"])
             actionError = nil
@@ -204,7 +205,7 @@ struct AgentDetailView: View {
         isClosing = true
         defer { isClosing = false }
         do {
-            _ = try await session.closePane(id: live.paneId)
+            try await session.closePane(id: live.paneId)
             actionError = nil
             announce("Pane closed")
             dismiss()

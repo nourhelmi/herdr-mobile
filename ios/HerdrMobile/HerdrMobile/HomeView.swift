@@ -10,6 +10,7 @@ struct HomeView: View {
     @State private var createError: String?
     @State private var pendingClose: PendingClose?
     @State private var closeError: String?
+    @State private var isClosing = false
 
     var body: some View {
         List {
@@ -101,7 +102,9 @@ struct HomeView: View {
             titleVisibility: .visible
         ) {
             Button(pendingCloseConfirmTitle, role: .destructive) {
-                Task { await confirmClose() }
+                let pending = pendingClose
+                pendingClose = nil
+                Task { await confirmClose(pending) }
             }
             Button("Cancel", role: .cancel) { pendingClose = nil }
         } message: {
@@ -419,17 +422,16 @@ private extension HomeView {
         }
     }
 
-    func confirmClose() async {
-        let pending = pendingClose
-        pendingClose = nil
+    func confirmClose(_ pending: PendingClose?) async {
+        guard let pending, !isClosing else { return }
+        isClosing = true
+        defer { isClosing = false }
         do {
             switch pending {
             case .tab(let tab):
-                _ = try await session.closeTab(id: tab.id)
+                try await session.closeTab(id: tab.id)
             case .workspace(let workspace):
-                _ = try await session.closeWorkspace(id: workspace.id)
-            case nil:
-                return
+                try await session.closeWorkspace(id: workspace.id)
             }
             closeError = nil
         } catch {
