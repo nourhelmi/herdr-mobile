@@ -13,6 +13,8 @@ struct AgentDetailView: View {
     @State private var prompt = ""
     @State private var terminalBuffer = ""
     @State private var lastForwarded = ""
+    @State private var inputRevision = 0
+    @State private var inputTask: Task<Void, Never>?
     @State private var isSending = false
     @State private var actionError: String?
 
@@ -49,7 +51,18 @@ struct AgentDetailView: View {
                         onSend: { Task { await handleKey("enter") } }
                     )
                     .onChange(of: terminalBuffer) { _, newValue in
-                        Task { await forwardDelta(newValue) }
+                        inputRevision += 1
+                        let revision = inputRevision
+                        inputTask?.cancel()
+                        inputTask = Task {
+                            do {
+                                try await Task.sleep(for: .milliseconds(120))
+                            } catch {
+                                return
+                            }
+                            guard !Task.isCancelled, revision == inputRevision else { return }
+                            await forwardDelta(newValue)
+                        }
                     }
                 }
             }
@@ -62,7 +75,10 @@ struct AgentDetailView: View {
         .toolbarBackground(HerdrInk.void, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .onAppear { session.watch(paneId: live.paneId) }
-        .onDisappear { session.unwatch() }
+        .onDisappear {
+            inputTask?.cancel()
+            session.unwatch()
+        }
     }
 
     private var header: some View {
@@ -169,7 +185,14 @@ struct AgentDetailView: View {
     }
 
     private func handleKey(_ key: String) async {
-        if mode == .terminal, key == "enter" || key == "esc" {
+        if mode == .terminal, key == "enter" {
+            await inputTask?.value
+            inputRevision += 1
+            terminalBuffer = ""
+            lastForwarded = ""
+        } else if mode == .terminal, key == "esc" {
+            inputTask?.cancel()
+            inputRevision += 1
             terminalBuffer = ""
             lastForwarded = ""
         }

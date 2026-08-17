@@ -1,0 +1,70 @@
+bun test v1.3.14 (0d9b296a)
+
+test/server.integration.test.ts:
+Herdr sidecar listening on http://127.0.0.1:0
+(pass) sidecar HTTP integration > serves all five endpoints with the frozen shapes and safe argv [9.73ms]
+Herdr sidecar listening on http://127.0.0.1:0
+(pass) sidecar HTTP integration > maps bad input, missing targets, and CLI failures to 400, 404, and 502 [2.97ms]
+Herdr sidecar listening on http://127.0.0.1:0
+(pass) sidecar HTTP integration > rejects oversized bodies, prompt text, key arrays, key values, and line counts [4.11ms]
+Herdr sidecar listening on http://127.0.0.1:0
+(pass) sidecar HTTP integration > rejects flag-like pane IDs, targets, prompt text, and keys before invoking Herdr [2.87ms]
+Herdr sidecar listening on http://127.0.0.1:0
+(pass) sidecar v1.1 HTTP integration > creates a workspace and tab, and forwards raw pane text [3.33ms]
+Herdr sidecar listening on http://127.0.0.1:0
+(pass) sidecar v1.1 HTTP integration > rejects flag-like and overlong labels and input before invoking Herdr [2.85ms]
+Herdr sidecar listening on http://127.0.0.1:0
+(pass) sidecar WebSocket integration > serializes reads, drops stale output, replaces watches, and cleans up on unwatch and close [341.24ms]
+Herdr sidecar listening on http://127.0.0.1:0
+(pass) sidecar WebSocket integration > returns error frames for malformed, over-limit, and flag-like watch messages [14.32ms]
+Herdr sidecar listening on http://127.0.0.1:0
+(pass) sidecar WebSocket integration > watch format ansi is passed through to pane read and output frames [12.36ms]
+(pass) binding validation > validates Tailscale IPv4 addresses and refuses wildcard hosts before binding [0.71ms]
+Herdr sidecar listening on http://127.0.0.1:0
+Herdr sidecar listening on http://100.115.104.23:0
+(pass) binding validation > rejects wildcard aliases, multicast, class-E, and IPv6; accepts loopback and unicast IPv4 [13.47ms]
+
+test/engine.test.ts:
+Skipping workspace with unsafe workspace_id: --inject 15 |   text(args: string[]): Promise<string>;
+16 | }
+17 | 
+18 | export function assertSafePositional(value: string, name: string): void {
+19 |   if (value.startsWith("-")) {
+20 |     throw new TypeError(`${name} must not start with '-'`);
+                   ^
+TypeError: workspace_id must not start with '-'
+      at assertSafePositional (/Users/nour/Dev/startups/herdr-mobile/sidecar/src/cli.ts:20:15)
+      at <anonymous> (/Users/nour/Dev/startups/herdr-mobile/sidecar/src/engine.ts:99:11)
+      at map (1:11)
+      at refreshStructure (/Users/nour/Dev/startups/herdr-mobile/sidecar/src/engine.ts:96:18)
+      at async <anonymous> (/Users/nour/Dev/startups/herdr-mobile/sidecar/src/engine.ts:60:22)
+
+(pass) StateEngine positional validation > skips a flag-like workspace_id without spawning and continues polling others [1.67ms]
+
+test/chrome.test.ts:
+(pass) trimAgentChrome > trims the live Pi boxed input + footer and keeps the file box [1.10ms]
+(pass) trimAgentChrome > strips ANSI before detecting the same chrome on a live ansi sample [0.38ms]
+(pass) trimAgentChrome > shows more when the box is not at the tail [0.10ms]
+(pass) trimAgentChrome > does not treat a todo tree as a box bottom [0.07ms]
+
+test/snapshot.test.ts:
+(pass) buildSnapshot > builds the frozen workspace tree from real Herdr fixtures [1.81ms]
+(pass) diffSnapshots > ignores generatedAt-only changes and reports pane-keyed state transitions [1.31ms]
+(pass) diffSnapshots > agent-set signature is stable across CLI ordering [0.29ms]
+
+test/notifier.test.ts:
+(pass) NotificationTracker > notifies transitions into blocked/done and debounces pane+state for 60 seconds [0.28ms]
+(pass) NotificationTracker > treats a first blocked observation as a restart baseline [0.02ms]
+(pass) NotificationWatcher persistence > persists last-seen state so restart does not re-notify [2.78ms]
+
+test/display.test.ts:
+(pass) sanitizePrivateUse > drops Powerline/Nerd PUA pairs and keeps π, ASCII, and cost [0.04ms]
+(pass) sanitizePrivateUse > keeps box drawing, emoji, and supplementary-plane non-PUA [0.08ms]
+(pass) sanitizePrivateUse > drops supplementary PUA used by Pi footer icons [0.04ms]
+(pass) parseDisplayAgent > parses live Herdr display_agent fields [0.05ms]
+(pass) parseDisplayAgent > parses fixture agents including the no-branch form [0.29ms]
+
+ 27 pass
+ 0 fail
+ 139 expect() calls
+Ran 27 tests across 6 files. [442.00ms]
