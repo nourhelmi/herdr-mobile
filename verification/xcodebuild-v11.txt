@@ -72,4 +72,3 @@ ProcessInfoPlistFile /Users/nour/Library/Developer/Xcode/DerivedData/HerdrMobile
     builtin-infoPlistUtility /Users/nour/Dev/startups/herdr-mobile/ios/HerdrMobile/Info.plist -producttype com.apple.product-type.application -genpkginfo /Users/nour/Library/Developer/Xcode/DerivedData/HerdrMobile-bkonrjjoasgiwbekdbffedafbhmx/Build/Products/Debug-iphonesimulator/HerdrMobile.app/PkgInfo -expandbuildsettings -format binary -platform iphonesimulator -o /Users/nour/Library/Developer/Xcode/DerivedData/HerdrMobile-bkonrjjoasgiwbekdbffedafbhmx/Build/Products/Debug-iphonesimulator/HerdrMobile.app/Info.plist
 
 ** BUILD SUCCEEDED **
-

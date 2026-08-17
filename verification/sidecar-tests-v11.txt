@@ -27,7 +27,7 @@ Herdr sidecar listening on http://100.115.104.23:0
 test/engine.test.ts:
 Skipping workspace with unsafe workspace_id: --inject 15 |   text(args: string[]): Promise<string>;
 16 | }
-17 | 
+17 |
 18 | export function assertSafePositional(value: string, name: string): void {
 19 |   if (value.startsWith("-")) {
 20 |     throw new TypeError(`${name} must not start with '-'`);
