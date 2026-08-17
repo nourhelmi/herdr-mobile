@@ -52,3 +52,7 @@ Content-Length: 11
 ## GET /pane/w5%3Ap1/output after harmless prompt (watched safe output)
 
 {"paneId":"w5:p1","format":"text","text":"\n\n╰─ ○ 5.2%/1M  󰔛 2m  󰧑 high ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯\n 🔀 Orchestrator · disabled (no taskplane config in workspace) · LSP Inactive · 🔌 MCP: 4 servers enabled"}
+
+## Listener binding
+
+Startup logged explicit listeners `127.0.0.1:8787` and `100.115.104.23:8787`; no `0.0.0.0` listener was observed.
