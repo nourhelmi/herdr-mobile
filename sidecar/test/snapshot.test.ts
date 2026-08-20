@@ -60,6 +60,22 @@ describe("buildSnapshot", () => {
       .flatMap((tab) => tab.panes)
       .find((pane) => pane.id === agent!.paneId);
     expect(embedded).toMatchObject({ isAgent: true, agent });
+
+    const allPanes = snapshot.workspaces.flatMap((workspace) => workspace.tabs).flatMap((tab) => tab.panes);
+    expect(allPanes.length).toBeGreaterThan(1);
+    const ordinaryPane = allPanes.find((pane) => pane.id !== agent!.paneId);
+    expect(ordinaryPane).toBeDefined();
+    expect(ordinaryPane).toMatchObject({ isAgent: false, agent: null });
+  });
+
+  test("isAgent never disagrees with agent presence, for every pane", async () => {
+    const input = await fixtureInput();
+    const snapshot = buildSnapshot(input);
+    const allPanes = snapshot.workspaces.flatMap((workspace) => workspace.tabs).flatMap((tab) => tab.panes);
+    expect(allPanes.length).toBeGreaterThan(0);
+    for (const pane of allPanes) {
+      expect(pane.isAgent).toBe(pane.agent !== null);
+    }
   });
 });
 

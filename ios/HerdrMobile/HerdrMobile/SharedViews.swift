@@ -121,6 +121,8 @@ private struct TerminalTextKitView: UIViewRepresentable {
         view.textContainer.lineFragmentPadding = 4
         view.alwaysBounceVertical = true
         view.indicatorStyle = .white
+        // Dragging the output pulls the keyboard down with it, like Messages/Terminal.
+        view.keyboardDismissMode = .interactive
         view.layoutManager.allowsNonContiguousLayout = true
         view.delegate = context.coordinator
         apply(text, to: view, coordinator: context.coordinator, forceScroll: true)
@@ -242,8 +244,9 @@ struct KeyCap: View {
             Text(title)
                 .font(HerdrType.key)
                 .foregroundStyle(enabled ? HerdrInk.void : HerdrInk.mute)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, 10)
+                // 44pt square: Apple HIG minimum tappable target, kept even as the cap shrinks visually.
+                .frame(minWidth: 44, minHeight: 44)
                 .background(enabled ? HerdrInk.paper : HerdrInk.rule, in: Rectangle())
         }
         .disabled(!enabled)
@@ -272,29 +275,77 @@ struct QuickKeysBar: View {
     var includeEnter = true
     var extended = false
     var onKey: (String) -> Void
+    /// Compact explicit dismiss affordance, shown at the trailing end when provided.
+    var onDismissKeyboard: (() -> Void)?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
+        // One scrollable row, not two stacked rows: the biggest single win for
+        // dock height without dropping any key or shrinking touch targets.
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
                 KeyCap(title: "ESC", send: "esc", enabled: enabled, onKey: onKey)
                 KeyCap(title: "^C", send: "ctrl+c", enabled: enabled, onKey: onKey)
                 if includeEnter {
                     KeyCap(title: "RET", send: "enter", enabled: enabled, onKey: onKey)
                 }
-                Spacer()
-            }
-            if extended {
-                HStack(spacing: 8) {
+                if extended {
                     KeyCap(title: "TAB", send: "tab", enabled: enabled, onKey: onKey)
                     KeyCap(title: "BSP", send: "backspace", enabled: enabled, onKey: onKey)
                     KeyCap(title: "↑", send: "up", enabled: enabled, onKey: onKey)
                     KeyCap(title: "↓", send: "down", enabled: enabled, onKey: onKey)
                     KeyCap(title: "←", send: "left", enabled: enabled, onKey: onKey)
                     KeyCap(title: "→", send: "right", enabled: enabled, onKey: onKey)
-                    Spacer()
+                }
+                if let onDismissKeyboard {
+                    Button(action: onDismissKeyboard) {
+                        Image(systemName: "keyboard.chevron.compact.down")
+                            .font(HerdrType.key)
+                            .foregroundStyle(HerdrInk.paper)
+                            .padding(.horizontal, 10)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .background(HerdrInk.rule, in: Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Hide keyboard")
                 }
             }
         }
+    }
+}
+
+/// Resigns whatever first responder is active, regardless of which text field owns it.
+func dismissActiveKeyboard() {
+    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+}
+
+/// Backup to `UITextView.keyboardDismissMode = .interactive`: that native mode is driven by
+/// the keyboard's own private pan tracking, which XCUITest's synthetic touch injection cannot
+/// reliably drive. This is a plain, testable pan gesture that runs alongside every existing
+/// gesture (scroll, horizontal quick-key scroll, taps) instead of intercepting them, and only
+/// fires on a real vertical-dominant downward drag, not an incidental diagonal touch.
+private struct PullDownToDismissKeyboard: ViewModifier {
+    @State private var didDismiss = false
+
+    func body(content: Content) -> some View {
+        content.simultaneousGesture(
+            DragGesture(minimumDistance: 16, coordinateSpace: .local)
+                .onChanged { value in
+                    guard !didDismiss else { return }
+                    let dy = value.translation.height
+                    let dx = value.translation.width
+                    guard dy > 40, dy > abs(dx) * 1.5 else { return }
+                    didDismiss = true
+                    dismissActiveKeyboard()
+                }
+                .onEnded { _ in didDismiss = false }
+        )
+    }
+}
+
+extension View {
+    /// Pulling down anywhere over the terminal output/dock resigns the keyboard.
+    func pullDownToDismissKeyboard() -> some View {
+        modifier(PullDownToDismissKeyboard())
     }
 }
 
@@ -308,11 +359,14 @@ struct PromptComposer: View {
     var onSend: () -> Void
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
+        HStack(alignment: .center, spacing: 8) {
             // UIKit field — SwiftUI TextField + FocusState + keyboard toolbar was the first-tap hitch.
             TerminalComposerField(text: $text, placeholder: placeholder, onSubmit: onSend)
-                .frame(minHeight: 40)
-                .padding(10)
+                // Fixed, not just minimum: a single-line field must never stretch to
+                // soak up leftover VStack space meant for terminal output above it.
+                .frame(height: 32)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
                 .background(HerdrInk.inset)
                 .overlay(Rectangle().stroke(HerdrInk.rule, lineWidth: 1))
                 .accessibilityLabel(fieldAccessibilityLabel)
@@ -321,7 +375,7 @@ struct PromptComposer: View {
                     .font(HerdrType.key)
                     .foregroundStyle(HerdrInk.void)
                     .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
+                    .frame(minWidth: 44, minHeight: 44)
                     .background(canSend ? HerdrInk.phosphor : HerdrInk.rule)
             }
             .buttonStyle(.plain)
@@ -452,5 +506,37 @@ struct ErrorBanner: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityLabel("Error \(message)")
         }
+    }
+}
+
+/// Shared composer dock for both agent and bare-pane terminal detail screens:
+/// quick keys, printable-text composer, and an inline error banner.
+struct TerminalInputDock: View {
+    @Binding var terminalBuffer: String
+    var errorMessage: String?
+    var onKey: (String) -> Void
+    var onTerminalChange: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ErrorBanner(message: errorMessage)
+            QuickKeysBar(
+                enabled: true,
+                includeEnter: true,
+                extended: true,
+                onKey: { key in onKey(key) },
+                onDismissKeyboard: dismissActiveKeyboard
+            )
+            PromptComposer(
+                text: $terminalBuffer,
+                onSend: { onKey("enter") }
+            )
+            .onChange(of: terminalBuffer) { _, newValue in
+                onTerminalChange(newValue)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(HerdrInk.panel)
     }
 }

@@ -139,6 +139,16 @@ function validateKeys(keys: string[]): void {
   }
 }
 
+async function readKeysBody(request: Request): Promise<string[]> {
+  const body = await readJsonBody(request);
+  const keys = body && typeof body === "object" ? (body as { keys?: unknown }).keys : undefined;
+  if (!Array.isArray(keys) || keys.length === 0 || !keys.every((key) => typeof key === "string")) {
+    throw new TypeError("keys must be a non-empty string array");
+  }
+  validateKeys(keys);
+  return keys;
+}
+
 function parseFormat(value: unknown, fallback: "text" | "ansi"): "text" | "ansi" {
   if (value === null || value === undefined || value === "") return fallback;
   if (value === "text" || value === "ansi") return value;
@@ -311,14 +321,24 @@ async function handleHttp(
     try {
       const target = decodePathPart(keysMatch[1]!);
       assertSafePositional(target, "target");
-      const body = await readJsonBody(request);
-      const keys = body && typeof body === "object" ? (body as { keys?: unknown }).keys : undefined;
-      if (!Array.isArray(keys) || keys.length === 0 || !keys.every((key) => typeof key === "string")) {
-        return json({ ok: false, error: "keys must be a non-empty string array" }, 400);
-      }
-      validateKeys(keys);
+      const keys = await readKeysBody(request);
       await cli.text(["agent", "send-keys", target, ...keys]);
       pokePane(paneIdForKeysTarget(engine.snapshot, target));
+      return json({ ok: true });
+    } catch (error) {
+      if (error instanceof TypeError) return json({ ok: false, error: error.message }, 400);
+      return errorResponse(error);
+    }
+  }
+
+  const paneKeysMatch = url.pathname.match(/^\/pane\/([^/]+)\/keys$/);
+  if (request.method === "POST" && paneKeysMatch) {
+    try {
+      const paneId = decodePathPart(paneKeysMatch[1]!);
+      assertSafePositional(paneId, "paneId");
+      const keys = await readKeysBody(request);
+      await cli.text(["pane", "send-keys", paneId, ...keys]);
+      pokePane(paneId);
       return json({ ok: true });
     } catch (error) {
       if (error instanceof TypeError) return json({ ok: false, error: error.message }, 400);

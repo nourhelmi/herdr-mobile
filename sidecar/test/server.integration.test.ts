@@ -197,6 +197,14 @@ describe("sidecar HTTP integration", () => {
     expect(keys.status).toBe(200);
     expect(await jsonResponse(keys)).toEqual({ ok: true });
 
+    const paneKeys = await fetch(`${baseUrl}/pane/w1%3Ap1/keys`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ keys: ["up", "backspace"] }),
+    });
+    expect(paneKeys.status).toBe(200);
+    expect(await jsonResponse(paneKeys)).toEqual({ ok: true });
+
     expect(cli.calls).toEqual([
       [
         "pane",
@@ -210,6 +218,7 @@ describe("sidecar HTTP integration", () => {
         "ansi",
       ],
       ["agent", "send-keys", "w1:p1", "esc", "ctrl+c"],
+      ["pane", "send-keys", "w1:p1", "up", "backspace"],
     ]);
   });
 
@@ -260,6 +269,18 @@ describe("sidecar HTTP integration", () => {
         method: "POST",
         body: JSON.stringify({ keys: ["x".repeat(MAX_KEY_LENGTH + 1)] }),
       }),
+      fetch(`${baseUrl}/pane/pi/keys`, {
+        method: "POST",
+        body: JSON.stringify({ keys: Array.from({ length: MAX_KEYS_COUNT + 1 }, () => "esc") }),
+      }),
+      fetch(`${baseUrl}/pane/pi/keys`, {
+        method: "POST",
+        body: JSON.stringify({ keys: ["x".repeat(MAX_KEY_LENGTH + 1)] }),
+      }),
+      fetch(`${baseUrl}/pane/pi/keys`, {
+        method: "POST",
+        body: JSON.stringify({ keys: [] }),
+      }),
       fetch(`${baseUrl}/pane/w1%3Ap1/output?lines=not-a-number`),
       fetch(`${baseUrl}/pane/w1%3Ap1/output?lines=${MAX_OUTPUT_LINES + 1}`),
     ];
@@ -284,6 +305,14 @@ describe("sidecar HTTP integration", () => {
         body: JSON.stringify({ text: "--help" }),
       }),
       fetch(`${baseUrl}/agent/pi/keys`, {
+        method: "POST",
+        body: JSON.stringify({ keys: ["--help"] }),
+      }),
+      fetch(`${baseUrl}/pane/${encodeURIComponent("--help")}/keys`, {
+        method: "POST",
+        body: JSON.stringify({ keys: ["esc"] }),
+      }),
+      fetch(`${baseUrl}/pane/pi/keys`, {
         method: "POST",
         body: JSON.stringify({ keys: ["--help"] }),
       }),
@@ -606,6 +635,72 @@ describe("sidecar close-controls HTTP integration", () => {
       ["workspace", "close", "w1"],
     ]);
     expect(engine.pollCalls).toEqual([true, true, true]);
+  });
+});
+
+describe("sidecar pane-keys HTTP integration", () => {
+  test("sends pane-scoped keys with exact argv and no structure poll", async () => {
+    const { baseUrl, cli, engine } = startTestServer();
+
+    const response = await fetch(`${baseUrl}/pane/w1%3Ap1/keys`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ keys: ["ctrl+c", "enter"] }),
+    });
+    expect(response.status).toBe(200);
+    expect(await jsonResponse(response)).toEqual({ ok: true });
+    expect(cli.calls).toEqual([["pane", "send-keys", "w1:p1", "ctrl+c", "enter"]]);
+    expect(engine.pollCalls).toHaveLength(0);
+  });
+
+  test("pokes an immediate read on the matching watcher without waiting for the poll interval", async () => {
+    const { baseUrl, cli } = startTestServer(new FakeCli(), 500);
+    const { socket, messages } = await connectWebSocket(baseUrl);
+    send(socket, { type: "watch", paneId: "w1:p1", lines: 5 });
+    await waitUntil(
+      () => messages.some((message) => message.type === "output" && message.paneId === "w1:p1"),
+      "initial watch output",
+    );
+
+    const readsBefore = paneReads(cli).length;
+    const started = Date.now();
+    const response = await fetch(`${baseUrl}/pane/w1%3Ap1/keys`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ keys: ["esc"] }),
+    });
+    expect(response.status).toBe(200);
+    await waitUntil(() => paneReads(cli).length > readsBefore, "pane-keys poke read");
+    expect(Date.now() - started).toBeLessThan(80);
+    expect(paneReads(cli).length).toBe(readsBefore + 1);
+    socket.close();
+  });
+
+  test("maps a missing pane to 404 and redacts CLI failures as 502", async () => {
+    const { baseUrl, cli } = startTestServer();
+
+    const missing = await fetch(`${baseUrl}/pane/missing/keys`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ keys: ["esc"] }),
+    });
+    expect(missing.status).toBe(404);
+    expect(await jsonResponse(missing)).toEqual({ ok: false, error: "Target not found" });
+
+    const failed = await fetch(`${baseUrl}/pane/failure/keys`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ keys: ["esc"] }),
+    });
+    expect(failed.status).toBe(502);
+    const body = await jsonResponse(failed);
+    expect(body).toEqual({ ok: false, error: "Herdr command failed" });
+    expect(JSON.stringify(body).includes("top-secret")).toBe(false);
+
+    expect(cli.calls).toEqual([
+      ["pane", "send-keys", "missing", "esc"],
+      ["pane", "send-keys", "failure", "esc"],
+    ]);
   });
 });
 

@@ -22,6 +22,8 @@
 		A1000000000000000000002D /* UnicodeText.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000000F /* UnicodeText.swift */; };
 		A1000000000000000000002E /* ChromeTrimmer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000010 /* ChromeTrimmer.swift */; };
 		A1000000000000000000002F /* ANSIRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000011 /* ANSIRenderer.swift */; };
+		A10000000000000000000030 /* TerminalInputController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000012 /* TerminalInputController.swift */; };
+		A10000000000000000000034 /* PaneDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000013 /* PaneDetailView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -40,6 +42,8 @@
 		A1000000000000000000000F /* UnicodeText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnicodeText.swift; sourceTree = "<group>"; };
 		A10000000000000000000010 /* ChromeTrimmer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChromeTrimmer.swift; sourceTree = "<group>"; };
 		A10000000000000000000011 /* ANSIRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ANSIRenderer.swift; sourceTree = "<group>"; };
+		A10000000000000000000012 /* TerminalInputController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalInputController.swift; sourceTree = "<group>"; };
+		A10000000000000000000013 /* PaneDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaneDetailView.swift; sourceTree = "<group>"; };
 		A1000000000000000000000D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A1000000000000000000000E /* HerdrMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HerdrMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -81,6 +85,8 @@
 				A10000000000000000000009 /* HomeView.swift */,
 				A1000000000000000000000A /* AgentDetailView.swift */,
 				A1000000000000000000000B /* PaneView.swift */,
+				A10000000000000000000013 /* PaneDetailView.swift */,
+				A10000000000000000000012 /* TerminalInputController.swift */,
 				A1000000000000000000000C /* SettingsView.swift */,
 			);
 			path = HerdrMobile;
@@ -176,6 +182,8 @@
 				A10000000000000000000029 /* HomeView.swift in Sources */,
 				A1000000000000000000002A /* AgentDetailView.swift in Sources */,
 				A1000000000000000000002B /* PaneView.swift in Sources */,
+				A10000000000000000000034 /* PaneDetailView.swift in Sources */,
+				A10000000000000000000030 /* TerminalInputController.swift in Sources */,
 				A1000000000000000000002C /* SettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

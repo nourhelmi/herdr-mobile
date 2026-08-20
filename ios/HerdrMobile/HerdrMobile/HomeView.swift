@@ -138,7 +138,7 @@ struct HomeView: View {
             } else {
                 ForEach(agents) { agent in
                     NavigationLink {
-                        AgentDetailView(agent: agent)
+                        PaneDetailView(paneId: agent.paneId, fallback: fallbackPane(for: agent))
                     } label: {
                         agentRow(agent)
                     }
@@ -291,7 +291,7 @@ struct HomeView: View {
                     .font(HerdrType.body)
                     .foregroundStyle(HerdrInk.paper)
                 Spacer()
-                if pane.isAgent {
+                if pane.agent != nil {
                     Text("AGENT")
                         .font(HerdrType.meta)
                         .foregroundStyle(HerdrInk.phosphor)
@@ -301,17 +301,26 @@ struct HomeView: View {
                 .font(HerdrType.meta)
                 .foregroundStyle(HerdrInk.mute)
         }
-        .accessibilityLabel("Pane \(paneTitle(pane))\(pane.isAgent ? ", agent" : "")")
+        .accessibilityLabel("Pane \(paneTitle(pane))\(pane.agent != nil ? ", agent" : "")")
     }
 
-    /// Agent-bearing panes share AgentDetailView; bare panes stay on PaneView.
-    @ViewBuilder
+    /// One destination for every pane row: PaneDetailView re-renders live as the
+    /// authoritative snapshot's `agent` membership for this pane changes.
     private func paneDestination(_ pane: PaneSnapshot) -> some View {
-        if let agent = pane.agent {
-            AgentDetailView(agent: agent)
-        } else {
-            PaneView(pane: pane)
-        }
+        PaneDetailView(paneId: pane.id, fallback: pane)
+    }
+
+    /// Synthesized only as a pre-first-render fallback; PaneDetailView looks up the
+    /// live pane by id on every render once the snapshot is available.
+    private func fallbackPane(for agent: AgentSnapshot) -> PaneSnapshot {
+        PaneSnapshot(
+            id: agent.paneId,
+            label: agent.paneLabel,
+            title: "",
+            cwd: agent.cwd,
+            isAgent: true,
+            agent: agent
+        )
     }
 
     private func paneTitle(_ pane: PaneSnapshot) -> String {

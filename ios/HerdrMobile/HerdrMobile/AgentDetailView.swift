@@ -6,11 +6,7 @@ struct AgentDetailView: View {
     @Environment(\.dismiss) private var dismiss
     let agent: AgentSnapshot
 
-    @State private var terminalBuffer = ""
-    @State private var lastForwarded = ""
-    @State private var inputRevision = 0
-    @State private var inputTask: Task<Void, Never>?
-    @State private var terminalWriteTask: Task<Void, Never>?
+    @State private var input = TerminalInputController()
     @State private var actionError: String?
     @State private var isAcknowledging = false
     @State private var acknowledgementMessage: String?
@@ -22,7 +18,8 @@ struct AgentDetailView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        @Bindable var input = input
+        return VStack(spacing: 0) {
             if showsRibbon {
                 AgentMetadataRibbon(agent: live) {
                     if live.state == "done" {
@@ -43,17 +40,18 @@ struct AgentDetailView: View {
             TerminalOutputView(
                 text: session.outputPaneId == live.paneId ? session.outputText : "",
                 emptyMessage: "Watching \(live.paneId) — output pins to the tail.",
-                pendingEcho: terminalBuffer
+                pendingEcho: input.terminalBuffer
             )
             Rectangle().fill(HerdrInk.rule).frame(height: 1)
-            AgentInputDock(
-                terminalBuffer: $terminalBuffer,
-                errorMessage: actionError ?? session.lastError,
+            TerminalInputDock(
+                terminalBuffer: $input.terminalBuffer,
+                errorMessage: actionError ?? input.actionError ?? session.lastError,
                 onKey: { key in Task { await handleKey(key) } },
                 onTerminalChange: scheduleTerminalForward
             )
         }
         .background(HerdrInk.void)
+        .pullDownToDismissKeyboard()
         .navigationTitle(live.displayTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(HerdrInk.void, for: .navigationBar)
@@ -88,18 +86,12 @@ struct AgentDetailView: View {
         } message: {
             Text(CloseScopeCopy.paneMessage(title: live.displayTitle, paneId: live.paneId))
         }
-        .onAppear { session.watch(paneId: live.paneId) }
         .onChange(of: live.state) { _, newState in
             if newState != "done" {
                 acknowledgementMessage = nil
             }
         }
-        .onDisappear {
-            inputRevision += 1
-            inputTask?.cancel()
-            terminalWriteTask?.cancel()
-            session.unwatch()
-        }
+        .onDisappear { input.reset() }
     }
 
     /// Interrupt is non-destructive (ctrl+c, layout stays). Only while the agent is busy.
@@ -200,88 +192,17 @@ struct AgentDetailView: View {
     }
 
     private func handleKey(_ key: String) async {
-        if key == "enter" {
-            await inputTask?.value
-            inputRevision += 1
-            terminalBuffer = ""
-            lastForwarded = ""
-        } else if key == "esc" {
-            inputTask?.cancel()
-            // Finish an in-flight pane write before clearing its acknowledged prefix;
-            // otherwise the clear callback could issue stale backspaces after ESC.
-            await terminalWriteTask?.value
-            inputRevision += 1
-            terminalBuffer = ""
-            lastForwarded = ""
-        }
-        do {
-            try await session.sendKeys(target: live.paneId, keys: [key])
-            actionError = nil
-        } catch {
-            actionError = error.localizedDescription
+        await input.handleKey(key) { [live] keys in
+            try await session.sendKeys(target: live.paneId, keys: keys)
         }
     }
 
-    /// Immediate leading edge: enqueue now. The write queue serializes POSTs;
-    /// stale revisions drop after the in-flight write so typing never waits for a pause.
     private func scheduleTerminalForward(_ newValue: String) {
-        inputRevision += 1
-        let revision = inputRevision
-        inputTask?.cancel()
-        inputTask = Task { @MainActor in
-            guard !Task.isCancelled, revision == inputRevision else { return }
-            await queueTerminalInput(newValue, revision: revision)
-        }
-    }
-
-    /// Serialize terminal writes so an older request cannot race a newer edit.
-    private func queueTerminalInput(_ newValue: String, revision: Int) async {
-        let previous = terminalWriteTask
-        let write = Task { @MainActor in
-            await previous?.value
-            guard !Task.isCancelled, revision == inputRevision else { return }
-            await forwardDelta(newValue)
-        }
-        terminalWriteTask = write
-        await write.value
-    }
-
-    private func forwardDelta(_ newValue: String) async {
-        let old = lastForwarded
-        guard newValue != old else { return }
-        do {
-            if newValue.hasPrefix(old) {
-                let delta = String(newValue.dropFirst(old.count))
-                if !delta.isEmpty {
-                    try await session.sendPaneInput(paneId: live.paneId, text: delta)
-                }
-            } else if old.hasPrefix(newValue) {
-                try await eraseTerminalText(from: old, to: newValue)
-            } else {
-                try await eraseTerminalText(from: old, to: "")
-                if !newValue.isEmpty {
-                    try await session.sendPaneInput(paneId: live.paneId, text: newValue)
-                }
-            }
-            lastForwarded = newValue
-            actionError = nil
-        } catch {
-            actionError = error.localizedDescription
-        }
-    }
-
-    /// The sidecar accepts at most 32 keys per request; retain partial progress on a later failure.
-    private func eraseTerminalText(from old: String, to new: String) async throws {
-        var current = old
-        while current.count > new.count {
-            let batchSize = min(current.count - new.count, 32)
-            try await session.sendKeys(
-                target: live.paneId,
-                keys: Array(repeating: "backspace", count: batchSize)
-            )
-            current = String(current.dropLast(batchSize))
-            lastForwarded = current
-        }
+        input.scheduleTerminalForward(
+            newValue,
+            sendText: { [live] text in try await session.sendPaneInput(paneId: live.paneId, text: text) },
+            sendKeys: { [live] keys in try await session.sendKeys(target: live.paneId, keys: keys) }
+        )
     }
 }
 
@@ -382,30 +303,5 @@ private struct AgentMetadataRibbon<Accessory: View>: View {
     private var compactCwd: String {
         let leaf = URL(fileURLWithPath: agent.cwd).lastPathComponent
         return leaf.isEmpty ? agent.cwd : leaf
-    }
-}
-
-private struct AgentInputDock: View {
-    @Binding var terminalBuffer: String
-    var errorMessage: String?
-    var onKey: (String) -> Void
-    var onTerminalChange: (String) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ErrorBanner(message: errorMessage)
-            QuickKeysBar(enabled: true, includeEnter: true, extended: true) { key in
-                onKey(key)
-            }
-            PromptComposer(
-                text: $terminalBuffer,
-                onSend: { onKey("enter") }
-            )
-            .onChange(of: terminalBuffer) { _, newValue in
-                onTerminalChange(newValue)
-            }
-        }
-        .padding(12)
-        .background(HerdrInk.panel)
     }
 }
