@@ -245,8 +245,8 @@ struct KeyCap: View {
                 .font(HerdrType.key)
                 .foregroundStyle(enabled ? HerdrInk.void : HerdrInk.mute)
                 .padding(.horizontal, 10)
-                // 44pt: Apple HIG minimum tappable target, kept even as the cap shrinks visually.
-                .frame(minHeight: 44)
+                // 44pt square: Apple HIG minimum tappable target, kept even as the cap shrinks visually.
+                .frame(minWidth: 44, minHeight: 44)
                 .background(enabled ? HerdrInk.paper : HerdrInk.rule, in: Rectangle())
         }
         .disabled(!enabled)
@@ -302,7 +302,7 @@ struct QuickKeysBar: View {
                             .font(HerdrType.key)
                             .foregroundStyle(HerdrInk.paper)
                             .padding(.horizontal, 10)
-                            .frame(minHeight: 44)
+                            .frame(minWidth: 44, minHeight: 44)
                             .background(HerdrInk.rule, in: Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -344,7 +344,7 @@ struct PromptComposer: View {
                     .font(HerdrType.key)
                     .foregroundStyle(HerdrInk.void)
                     .padding(.horizontal, 12)
-                    .frame(minHeight: 44)
+                    .frame(minWidth: 44, minHeight: 44)
                     .background(canSend ? HerdrInk.phosphor : HerdrInk.rule)
             }
             .buttonStyle(.plain)
