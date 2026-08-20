@@ -318,6 +318,37 @@ func dismissActiveKeyboard() {
     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
 }
 
+/// Backup to `UITextView.keyboardDismissMode = .interactive`: that native mode is driven by
+/// the keyboard's own private pan tracking, which XCUITest's synthetic touch injection cannot
+/// reliably drive. This is a plain, testable pan gesture that runs alongside every existing
+/// gesture (scroll, horizontal quick-key scroll, taps) instead of intercepting them, and only
+/// fires on a real vertical-dominant downward drag, not an incidental diagonal touch.
+private struct PullDownToDismissKeyboard: ViewModifier {
+    @State private var didDismiss = false
+
+    func body(content: Content) -> some View {
+        content.simultaneousGesture(
+            DragGesture(minimumDistance: 16, coordinateSpace: .local)
+                .onChanged { value in
+                    guard !didDismiss else { return }
+                    let dy = value.translation.height
+                    let dx = value.translation.width
+                    guard dy > 40, dy > abs(dx) * 1.5 else { return }
+                    didDismiss = true
+                    dismissActiveKeyboard()
+                }
+                .onEnded { _ in didDismiss = false }
+        )
+    }
+}
+
+extension View {
+    /// Pulling down anywhere over the terminal output/dock resigns the keyboard.
+    func pullDownToDismissKeyboard() -> some View {
+        modifier(PullDownToDismissKeyboard())
+    }
+}
+
 struct PromptComposer: View {
     @Binding var text: String
     var isSending = false

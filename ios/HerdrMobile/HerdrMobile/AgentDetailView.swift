@@ -51,6 +51,7 @@ struct AgentDetailView: View {
             )
         }
         .background(HerdrInk.void)
+        .pullDownToDismissKeyboard()
         .navigationTitle(live.displayTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(HerdrInk.void, for: .navigationBar)

@@ -37,6 +37,7 @@ struct PaneView: View {
             )
         }
         .background(HerdrInk.void)
+        .pullDownToDismissKeyboard()
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(HerdrInk.void, for: .navigationBar)
