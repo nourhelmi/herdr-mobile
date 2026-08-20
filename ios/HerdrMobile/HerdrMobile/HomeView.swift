@@ -291,7 +291,7 @@ struct HomeView: View {
                     .font(HerdrType.body)
                     .foregroundStyle(HerdrInk.paper)
                 Spacer()
-                if pane.isAgent {
+                if pane.agent != nil {
                     Text("AGENT")
                         .font(HerdrType.meta)
                         .foregroundStyle(HerdrInk.phosphor)
@@ -301,7 +301,7 @@ struct HomeView: View {
                 .font(HerdrType.meta)
                 .foregroundStyle(HerdrInk.mute)
         }
-        .accessibilityLabel("Pane \(paneTitle(pane))\(pane.isAgent ? ", agent" : "")")
+        .accessibilityLabel("Pane \(paneTitle(pane))\(pane.agent != nil ? ", agent" : "")")
     }
 
     /// One destination for every pane row: PaneDetailView re-renders live as the

@@ -18,10 +18,16 @@ struct PaneDetailView: View {
 
     var body: some View {
         let pane = livePane ?? fallback
-        if let agent = pane.agent {
-            AgentDetailView(agent: agent)
-        } else {
-            PaneView(pane: pane)
+        Group {
+            if let agent = pane.agent {
+                AgentDetailView(agent: agent)
+            } else {
+                PaneView(pane: pane)
+            }
         }
+        // Own the watch above both branches: a disappearing child must not race
+        // an appearing child and leave a live role transition unsubscribed.
+        .onAppear { session.watch(paneId: paneId) }
+        .onDisappear { session.unwatch() }
     }
 }

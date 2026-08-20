@@ -63,11 +63,7 @@ struct PaneView: View {
         } message: {
             Text(CloseScopeCopy.paneMessage(title: title, paneId: live.id))
         }
-        .onAppear { session.watch(paneId: live.id) }
-        .onDisappear {
-            input.reset()
-            session.unwatch()
-        }
+        .onDisappear { input.reset() }
     }
 
     private var title: String {
@@ -82,7 +78,7 @@ struct PaneView: View {
                 if let agent = live.agent {
                     StateBadge(state: agent.state)
                 } else {
-                    Text(live.isAgent ? "AGENT" : "PANE")
+                    Text("PANE")
                         .font(HerdrType.meta)
                         .foregroundStyle(HerdrInk.mute)
                 }

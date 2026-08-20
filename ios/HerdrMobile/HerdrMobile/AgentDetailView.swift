@@ -85,16 +85,12 @@ struct AgentDetailView: View {
         } message: {
             Text(CloseScopeCopy.paneMessage(title: live.displayTitle, paneId: live.paneId))
         }
-        .onAppear { session.watch(paneId: live.paneId) }
         .onChange(of: live.state) { _, newState in
             if newState != "done" {
                 acknowledgementMessage = nil
             }
         }
-        .onDisappear {
-            input.reset()
-            session.unwatch()
-        }
+        .onDisappear { input.reset() }
     }
 
     /// Interrupt is non-destructive (ctrl+c, layout stays). Only while the agent is busy.
