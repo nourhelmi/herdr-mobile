@@ -69,13 +69,16 @@ Notes:
 | GET | `/state` | — | Snapshot (above) |
 | GET | `/pane/:id/output` | `lines` (default 200), `format` = `text`\|`ansi` (default `text`) | `{"paneId":"w1:p7","format":"text","text":"..."}` |
 | POST | `/agent/:target/keys` | body `{"keys":["esc"]}` | `{"ok":true}` |
+| POST | `/pane/:id/keys` | body `{"keys":["esc"]}` | `{"ok":true}` |
 
 - `:id` / `:target` are URL-path-encoded (pane ids contain `:` — encode as `%3A`;
   the sidecar decodes). `:target` may be an agent name or a pane id.
 - Errors: non-2xx with `{"ok":false,"error":"message"}`. Herdr CLI failures
   map to 502; bad input to 400; unknown pane/agent to 404 when detectable.
-- Key names for `/keys` are passed through to `herdr agent send-keys`
-  (e.g. `esc`, `ctrl+c`, `enter`).
+- Key names for `/agent/:target/keys` are passed through to
+  `herdr agent send-keys` (e.g. `esc`, `ctrl+c`, `enter`). `/pane/:id/keys`
+  takes the same body shape and validation and wraps `herdr pane send-keys
+  <paneId> ...keys` instead — use it for a bare pane that has no agent.
 
 ## WebSocket — `GET /ws`
 
@@ -101,13 +104,14 @@ JSON text frames, every message has `type`.
   exponential backoff (1s, 2s, 4s… cap 30s) and re-sends `watch` after
   reconnect.
 - Actions (input/keys) always go over HTTP, never WS.
-- After a successful `POST /pane/:id/input` (`pane send-text`) or
-  `POST /agent/:target/keys` (`agent send-keys`), the sidecar immediately
-  queues one serialized pane read on every WebSocket watcher whose watched
-  pane matches. Keys resolve `target` → pane id from the current snapshot
-  (pane id first, then agent name). A poke while a read is in flight
-  coalesces to one follow-up; it does not stack unbounded reads. Unwatch
-  bumps generation, so a poke after unwatch is a no-op.
+- After a successful `POST /pane/:id/input` (`pane send-text`),
+  `POST /agent/:target/keys` (`agent send-keys`), or `POST /pane/:id/keys`
+  (`pane send-keys`), the sidecar immediately queues one serialized pane read
+  on every WebSocket watcher whose watched pane matches. Agent keys resolve
+  `target` → pane id from the current snapshot (pane id first, then agent
+  name); pane keys always target the pane id directly. A poke while a read is
+  in flight coalesces to one follow-up; it does not stack unbounded reads.
+  Unwatch bumps generation, so a poke after unwatch is a no-op.
 
 ## v1.1 addendum
 
@@ -153,8 +157,8 @@ chip should prefer `display`.
 `watch` accepts optional `format`: `"text"` (v1 default) or `"ansi"`.
 Output frames echo that format. Clients that want terminal styling should watch
 `ansi` and render SGR locally. The iOS client requests `ansi` and uses the same
-ANSI-colored terminal renderer. Agent detail forwards live pane input and keys
-only; there is no prompt-mode HTTP path.
+ANSI-colored terminal renderer. Agent detail and bare-pane terminal mode both
+forward live pane input and keys only; there is no prompt-mode HTTP path.
 
 ## v2 addendum
 
@@ -225,3 +229,25 @@ watchers for an immediate serialized read.
 Watched pane output polls every **100ms**. A successful pane input or agent
 keys action does not wait for that interval: it queues one serialized
 `pane read` on each matching watcher (see WebSocket notes above).
+
+## Pane-keys addendum
+
+Additive. The v1, v1.1, v2, and close-controls tables above stay the contract.
+
+### HTTP
+
+| Method | Path | Body | Response |
+| --- | --- | --- | --- |
+| POST | `/pane/:id/keys` | `{"keys":["esc"]}` | `{"ok":true}` |
+
+- Same validation as `/agent/:target/keys`: at most 32 keys, 128 characters
+  each, none flag-like. Wraps exact argv `herdr pane send-keys <paneId>
+  ...keys`. No shell interpolation, aliases, or extra payload fields.
+- Detectable missing panes map to 404. CLI failures map to 502 with a
+  redacted `"Herdr command failed"` message.
+- Non-destructive: no structure poll, matching `/agent/:target/keys`. A
+  successful call still pokes matching watchers for an immediate serialized
+  read.
+- Ordinary (non-agent) panes are genuinely interactive: printable text goes
+  through `/pane/:id/input`, and Enter, Esc, Ctrl-C, arrow keys, and
+  Backspace go through `/pane/:id/keys`. Bare panes are not read-only.

@@ -454,3 +454,30 @@ struct ErrorBanner: View {
         }
     }
 }
+
+/// Shared composer dock for both agent and bare-pane terminal detail screens:
+/// quick keys, printable-text composer, and an inline error banner.
+struct TerminalInputDock: View {
+    @Binding var terminalBuffer: String
+    var errorMessage: String?
+    var onKey: (String) -> Void
+    var onTerminalChange: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ErrorBanner(message: errorMessage)
+            QuickKeysBar(enabled: true, includeEnter: true, extended: true) { key in
+                onKey(key)
+            }
+            PromptComposer(
+                text: $terminalBuffer,
+                onSend: { onKey("enter") }
+            )
+            .onChange(of: terminalBuffer) { _, newValue in
+                onTerminalChange(newValue)
+            }
+        }
+        .padding(12)
+        .background(HerdrInk.panel)
+    }
+}

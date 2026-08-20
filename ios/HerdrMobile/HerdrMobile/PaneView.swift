@@ -1,10 +1,14 @@
 import SwiftUI
 
+/// Ordinary (non-agent) pane: genuinely interactive terminal, not text-only.
+/// Printable text and quick keys both use pane-scoped transport (`/pane/:id/input`
+/// and `/pane/:id/keys`), never the agent-key route.
 struct PaneView: View {
     @Environment(SessionController.self) private var session
     @Environment(\.dismiss) private var dismiss
     let pane: PaneSnapshot
 
+    @State private var input = TerminalInputController()
     @State private var actionError: String?
     @State private var showClosePane = false
     @State private var isClosing = false
@@ -15,12 +19,21 @@ struct PaneView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        @Bindable var input = input
+        return VStack(spacing: 0) {
             header
             Rectangle().fill(HerdrInk.rule).frame(height: 1)
             TerminalOutputView(
                 text: session.outputPaneId == live.id ? session.outputText : "",
-                emptyMessage: "Watching \(live.id) — output pins to the tail."
+                emptyMessage: "Watching \(live.id) — output pins to the tail.",
+                pendingEcho: input.terminalBuffer
+            )
+            Rectangle().fill(HerdrInk.rule).frame(height: 1)
+            TerminalInputDock(
+                terminalBuffer: $input.terminalBuffer,
+                errorMessage: actionError ?? input.actionError ?? session.lastError,
+                onKey: { key in Task { await handleKey(key) } },
+                onTerminalChange: scheduleTerminalForward
             )
         }
         .background(HerdrInk.void)
@@ -51,7 +64,10 @@ struct PaneView: View {
             Text(CloseScopeCopy.paneMessage(title: title, paneId: live.id))
         }
         .onAppear { session.watch(paneId: live.id) }
-        .onDisappear { session.unwatch() }
+        .onDisappear {
+            input.reset()
+            session.unwatch()
+        }
     }
 
     private var title: String {
@@ -84,7 +100,7 @@ struct PaneView: View {
                     .font(HerdrType.meta)
                     .foregroundStyle(HerdrInk.mute)
             }
-            ErrorBanner(message: actionError ?? session.lastError)
+            ErrorBanner(message: actionError ?? input.actionError ?? session.lastError)
         }
         .padding(12)
         .background(HerdrInk.panel)
@@ -101,5 +117,19 @@ struct PaneView: View {
         } catch {
             actionError = error.localizedDescription
         }
+    }
+
+    private func handleKey(_ key: String) async {
+        await input.handleKey(key) { [live] keys in
+            try await session.sendPaneKeys(paneId: live.id, keys: keys)
+        }
+    }
+
+    private func scheduleTerminalForward(_ newValue: String) {
+        input.scheduleTerminalForward(
+            newValue,
+            sendText: { [live] text in try await session.sendPaneInput(paneId: live.id, text: text) },
+            sendKeys: { [live] keys in try await session.sendPaneKeys(paneId: live.id, keys: keys) }
+        )
     }
 }

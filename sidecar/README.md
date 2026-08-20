@@ -21,7 +21,12 @@ On startup it prints the generated ntfy topic. Runtime state is stored under `si
 
 ## HTTP
 
-See the frozen v1/v1.1 tables in [`PROTOCOL.md`](../PROTOCOL.md#http-api) and the [v2 addendum](../PROTOCOL.md#v2-addendum). Herdr commands are spawned with argv arrays; request values are never interpolated into a shell command.
+See the frozen v1/v1.1 tables in [`PROTOCOL.md`](../PROTOCOL.md#http-api), the [v2 addendum](../PROTOCOL.md#v2-addendum), and the [pane-keys addendum](../PROTOCOL.md#pane-keys-addendum). Herdr commands are spawned with argv arrays; request values are never interpolated into a shell command.
+
+`POST /pane/:id/keys` wraps `herdr pane send-keys <paneId> ...keys` with the
+same validation as `POST /agent/:target/keys`, so an ordinary (non-agent)
+pane can receive Enter, Esc, Ctrl-C, arrow keys, and Backspace — not just
+printable text via `/pane/:id/input`.
 
 `POST /agent/:target/acknowledge` is bodyless and wraps only `herdr agent focus <target>`. A 2xx response means that argv call and a sidecar agent poll both completed; clients then fetch `/state`. A successful mutation whose poll fails returns 502 and must be refreshed before retrying. Workspace and tab creation use the same freshness rule with a structure poll.
 

@@ -92,6 +92,11 @@ final class HerdrClient {
         try await post(path: "/agent/\(Self.encodePath(target))/keys", body: ["keys": keys])
     }
 
+    /// Pane-scoped keys for a bare (non-agent) pane; wraps `herdr pane send-keys`.
+    func sendPaneKeys(paneId: String, keys: [String]) async throws {
+        try await post(path: "/pane/\(Self.encodePath(paneId))/keys", body: ["keys": keys])
+    }
+
     func sendPaneInput(paneId: String, text: String) async throws {
         try await post(path: "/pane/\(Self.encodePath(paneId))/input", body: ["text": text])
     }

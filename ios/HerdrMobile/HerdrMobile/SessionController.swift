@@ -97,6 +97,10 @@ final class SessionController {
         try await client.sendKeys(target: target, keys: keys)
     }
 
+    func sendPaneKeys(paneId: String, keys: [String]) async throws {
+        try await client.sendPaneKeys(paneId: paneId, keys: keys)
+    }
+
     func sendPaneInput(paneId: String, text: String) async throws {
         try await client.sendPaneInput(paneId: paneId, text: text)
     }
