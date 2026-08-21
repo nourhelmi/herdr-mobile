@@ -80,10 +80,12 @@ struct TerminalOutputView: View {
     var emptyMessage: String
     /// Local composer text — shown instantly; sidecar echo still replaces the snapshot.
     var pendingEcho: String = ""
+    /// Called only after a user-driven scroll reaches the oldest loaded row.
+    var onReachTop: (() -> Void)? = nil
 
     var body: some View {
         // TextKit, not SwiftUI Text — full-snapshot ticks were relayouting one giant document.
-        TerminalTextKitView(text: text, emptyMessage: emptyMessage)
+        TerminalTextKitView(text: text, emptyMessage: emptyMessage, onReachTop: onReachTop)
             .background(HerdrInk.inset)
             .overlay(alignment: .bottomLeading) {
                 if !pendingEcho.isEmpty {
@@ -107,9 +109,10 @@ struct TerminalOutputView: View {
 private struct TerminalTextKitView: UIViewRepresentable {
     var text: String
     var emptyMessage: String
+    var onReachTop: (() -> Void)?
 
     func makeCoordinator() -> Coordinator {
-        Coordinator()
+        Coordinator(onReachTop: onReachTop)
     }
 
     func makeUIView(context: Context) -> UITextView {
@@ -130,6 +133,7 @@ private struct TerminalTextKitView: UIViewRepresentable {
     }
 
     func updateUIView(_ view: UITextView, context: Context) {
+        context.coordinator.onReachTop = onReachTop
         apply(text, to: view, coordinator: context.coordinator, forceScroll: false)
     }
 
@@ -137,7 +141,13 @@ private struct TerminalTextKitView: UIViewRepresentable {
         var lastSource: String?
         var generation = 0
         var pinnedToTail = true
-        var colorizeWork: DispatchWorkItem?
+        var renderWork: DispatchWorkItem?
+        var onReachTop: (() -> Void)?
+        var topRequestArmed = true
+
+        init(onReachTop: (() -> Void)?) {
+            self.onReachTop = onReachTop
+        }
 
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
             pinnedToTail = isNearTail(scrollView)
@@ -149,6 +159,17 @@ private struct TerminalTextKitView: UIViewRepresentable {
 
         func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
             pinnedToTail = isNearTail(scrollView)
+        }
+
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            guard topRequestArmed,
+                  scrollView.isTracking || scrollView.isDragging || scrollView.isDecelerating,
+                  scrollView.contentSize.height > scrollView.bounds.height + 1
+            else { return }
+            let top = -scrollView.adjustedContentInset.top
+            guard scrollView.contentOffset.y <= top + 32 else { return }
+            topRequestArmed = false
+            onReachTop?()
         }
 
         func isNearTail(_ scrollView: UIScrollView) -> Bool {
@@ -164,39 +185,45 @@ private struct TerminalTextKitView: UIViewRepresentable {
     ) {
         guard coordinator.lastSource != raw else { return }
         coordinator.lastSource = raw
+        coordinator.topRequestArmed = true
         coordinator.generation += 1
         let generation = coordinator.generation
         let emptyCopy = emptyMessage
-        let pin = forceScroll || coordinator.pinnedToTail
-        coordinator.colorizeWork?.cancel()
+        coordinator.renderWork?.cancel()
 
-        // First paint: stripped mono. Color runs wait — and are coalesced while typing.
         let plain = ANSIStripper.displayText(raw)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        if plain.isEmpty {
+        guard !plain.isEmpty else {
             view.attributedText = Self.placeholder(emptyCopy)
-        } else {
-            view.attributedText = NSAttributedString(
-                string: plain,
-                attributes: [
-                    .font: UIFont.monospacedSystemFont(ofSize: 12, weight: .regular),
-                    .foregroundColor: UIColor(HerdrInk.paper),
-                ]
-            )
+            if forceScroll || coordinator.pinnedToTail { Self.scrollToTail(view) }
+            return
         }
-        if pin { Self.scrollToTail(view) }
 
-        guard !plain.isEmpty else { return }
+        // Never flash a stripped, all-white copy before applying ANSI color. Keep
+        // the previous colored frame visible, render off-main, then swap once.
+        if view.attributedText.length == 0 {
+            view.attributedText = Self.placeholder(emptyCopy)
+        }
         let work = DispatchWorkItem {
             let rendered = ANSIRenderer.nsAttributed(raw)
             DispatchQueue.main.async {
                 guard coordinator.generation == generation else { return }
+                let pin = forceScroll || coordinator.pinnedToTail
+                let distanceFromBottom = max(
+                    view.contentSize.height - view.contentOffset.y - view.bounds.height,
+                    0
+                )
                 view.attributedText = rendered
-                if coordinator.pinnedToTail { Self.scrollToTail(view) }
+                view.layoutIfNeeded()
+                if pin {
+                    Self.scrollToTail(view)
+                } else {
+                    Self.restoreScrollPosition(view, distanceFromBottom: distanceFromBottom)
+                }
             }
         }
-        coordinator.colorizeWork = work
-        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.12, execute: work)
+        coordinator.renderWork = work
+        DispatchQueue.global(qos: .userInitiated).async(execute: work)
     }
 
     private static func placeholder(_ message: String) -> NSAttributedString {
@@ -213,6 +240,123 @@ private struct TerminalTextKitView: UIViewRepresentable {
         view.layoutIfNeeded()
         let end = max(view.text.count - 1, 0)
         view.scrollRangeToVisible(NSRange(location: end, length: 0))
+    }
+
+    private static func restoreScrollPosition(_ view: UITextView, distanceFromBottom: CGFloat) {
+        let minimumY = -view.adjustedContentInset.top
+        let maximumY = max(
+            minimumY,
+            view.contentSize.height - view.bounds.height + view.adjustedContentInset.bottom
+        )
+        view.setContentOffset(
+            CGPoint(x: view.contentOffset.x, y: max(minimumY, maximumY - distanceFromBottom)),
+            animated: false
+        )
+    }
+}
+
+struct TerminalHistoryView: View {
+    @Environment(SessionController.self) private var session
+    @Environment(\.dismiss) private var dismiss
+
+    let paneId: String
+    let title: String
+
+    @State private var text = ""
+    @State private var requestedLines = 200
+    @State private var returnedLines = 0
+    @State private var isLoading = false
+    @State private var complete = false
+    @State private var limitReached = false
+    @State private var errorMessage: String?
+
+    private let maximumLines = 2_000
+
+    var body: some View {
+        VStack(spacing: 0) {
+            historyStatus
+            Rectangle().fill(HerdrInk.rule).frame(height: 1)
+            TerminalOutputView(
+                text: text,
+                emptyMessage: isLoading ? "Loading earlier output…" : "No terminal history available.",
+                onReachTop: requestEarlier
+            )
+        }
+        .background(HerdrInk.void)
+        .navigationTitle("Output history")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(HerdrInk.void, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Close") { dismiss() }
+                    .foregroundStyle(HerdrInk.phosphor)
+            }
+        }
+        .task(id: paneId) {
+            await load(lines: requestedLines)
+        }
+    }
+
+    private var historyStatus: some View {
+        HStack(spacing: 8) {
+            if isLoading {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(HerdrInk.phosphor)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(HerdrType.meta)
+                    .foregroundStyle(HerdrInk.paper)
+                    .lineLimit(1)
+                Text(statusCopy)
+                    .font(HerdrType.meta)
+                    .foregroundStyle(errorMessage == nil ? HerdrInk.mute : HerdrInk.flare)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(HerdrInk.panel)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var statusCopy: String {
+        if let errorMessage { return errorMessage }
+        if isLoading && text.isEmpty { return "Loading recent output…" }
+        if complete { return "Oldest available output · \(returnedLines) lines" }
+        if limitReached { return "History limit reached · \(returnedLines) lines" }
+        return "\(returnedLines) lines · scroll to the top to load earlier"
+    }
+
+    private func requestEarlier() {
+        guard !isLoading, !complete, !limitReached else { return }
+        let next = min(requestedLines * 2, maximumLines)
+        guard next > requestedLines else {
+            limitReached = true
+            return
+        }
+        Task { await load(lines: next) }
+    }
+
+    private func load(lines: Int) async {
+        guard !isLoading else { return }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let response = try await session.paneHistory(paneId: paneId, lines: lines)
+            guard response.paneId == paneId else { return }
+            text = response.text
+            requestedLines = response.requestedLines
+            returnedLines = response.returnedLines
+            complete = response.complete
+            limitReached = !response.complete && response.requestedLines >= maximumLines
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }
 
@@ -260,6 +404,7 @@ struct KeyCap: View {
         case "ctrl+c": return "Send control C"
         case "enter": return "Send enter"
         case "tab": return "Send tab"
+        case "shift+tab": return "Send shift tab; in Pi this changes the reasoning level"
         case "backspace": return "Send backspace"
         case "up": return "Send up arrow"
         case "down": return "Send down arrow"
@@ -290,6 +435,7 @@ struct QuickKeysBar: View {
                 }
                 if extended {
                     KeyCap(title: "TAB", send: "tab", enabled: enabled, onKey: onKey)
+                    KeyCap(title: "⇧TAB", send: "shift+tab", enabled: enabled, onKey: onKey)
                     KeyCap(title: "BSP", send: "backspace", enabled: enabled, onKey: onKey)
                     KeyCap(title: "↑", send: "up", enabled: enabled, onKey: onKey)
                     KeyCap(title: "↓", send: "down", enabled: enabled, onKey: onKey)
@@ -314,6 +460,7 @@ struct QuickKeysBar: View {
 }
 
 /// Resigns whatever first responder is active, regardless of which text field owns it.
+@MainActor
 func dismissActiveKeyboard() {
     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
 }

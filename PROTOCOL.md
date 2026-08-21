@@ -68,6 +68,7 @@ Notes:
 | GET | `/health` | — | `{"ok":true,"version":"1.x","herdr":true}` (`herdr:false` if last poll failed) |
 | GET | `/state` | — | Snapshot (above) |
 | GET | `/pane/:id/output` | `lines` (default 200), `format` = `text`\|`ansi` (default `text`) | `{"paneId":"w1:p7","format":"text","text":"..."}` |
+| GET | `/pane/:id/history` | `lines` (default 200, max 2,000), `format` = `text`\|`ansi` (default `ansi`) | `{"paneId":"w1:p7","format":"ansi","text":"...","requestedLines":200,"returnedLines":200,"complete":false}` |
 | POST | `/agent/:target/keys` | body `{"keys":["esc"]}` | `{"ok":true}` |
 | POST | `/pane/:id/keys` | body `{"keys":["esc"]}` | `{"ok":true}` |
 
@@ -80,6 +81,19 @@ Notes:
   takes the same body shape and validation and wraps `herdr pane send-keys
   <paneId> ...keys` instead — use it for a bare pane that has no agent.
 
+### Pane history
+
+`GET /pane/:id/history` is a one-shot, on-demand scrollback read; it is not
+part of the 100ms live watch. It reads Herdr `recent-unwrapped` so clients can
+progressively request 200, 400, 800, 1,600, then 2,000 rows without making every
+live tick carry the whole transcript. A fresh pane with no recent scrollback
+falls back to its visible screen.
+
+`returnedLines` counts the rows Herdr returned. `complete` is true when that
+count is lower than `requestedLines`, meaning the oldest output Herdr currently
+exposes has been reached. A client that reaches the 2,000-row protocol cap must
+stop growing the request even when `complete` is false.
+
 ## WebSocket — `GET /ws`
 
 JSON text frames, every message has `type`.
@@ -89,7 +103,7 @@ JSON text frames, every message has `type`.
 | type | payload | when |
 | --- | --- | --- |
 | `state` | `{type:"state", state:<Snapshot>}` | on connect + on every detected diff |
-| `output` | `{type:"output", paneId, text, format:"text"}` | watched pane output changed (~100ms poll; input/keys poke an immediate read) |
+| `output` | `{type:"output", paneId, text, format:"text"}` | watched visible terminal screen changed (~100ms poll; input/keys poke an immediate read) |
 | `error` | `{type:"error", message}` | bad client message or watch failure |
 
 ### Client → server
@@ -226,7 +240,10 @@ watchers for an immediate serialized read.
 
 ### Live output
 
-Watched pane output polls every **100ms**. A successful pane input or agent
+Watched pane output mirrors Herdr's **visible** terminal screen every **100ms**.
+It does not read `recent-unwrapped`: that scrollback source is empty in a fresh
+shell and immediately after Pi's `/new`, even though the terminal screen has
+content. A successful pane input or agent
 keys action does not wait for that interval: it queues one serialized
 `pane read` on each matching watcher (see WebSocket notes above).
 

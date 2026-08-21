@@ -195,6 +195,13 @@ async function refreshAfterMutation(
   );
 }
 
+function outputLineCount(text: string): number {
+  const normalized = text.replace(/\r\n?/g, "\n");
+  if (normalized.length === 0) return 0;
+  const withoutTrailingNewline = normalized.endsWith("\n") ? normalized.slice(0, -1) : normalized;
+  return withoutTrailingNewline.split("\n").length;
+}
+
 async function handleHttp(
   request: Request,
   engine: StateEngine,
@@ -222,18 +229,67 @@ async function handleHttp(
       assertSafePositional(paneId, "paneId");
       const lines = parseLines(url.searchParams.get("lines"), 200);
       const format = parseFormat(url.searchParams.get("format"), "text");
+      // Interactive panes can have a populated screen with no recent scrollback
+      // (a fresh shell, or Pi immediately after `/new`). Mirror the live screen.
       const text = await cli.text([
         "pane",
         "read",
         paneId,
         "--source",
-        "recent-unwrapped",
+        "visible",
         "--lines",
         String(lines),
         "--format",
         format,
       ]);
       return json({ paneId, format, text });
+    } catch (error) {
+      if (error instanceof TypeError) return json({ ok: false, error: error.message }, 400);
+      return errorResponse(error);
+    }
+  }
+
+  const historyMatch = url.pathname.match(/^\/pane\/([^/]+)\/history$/);
+  if (request.method === "GET" && historyMatch) {
+    try {
+      const paneId = decodePathPart(historyMatch[1]!);
+      assertSafePositional(paneId, "paneId");
+      const requestedLines = parseLines(url.searchParams.get("lines"), 200);
+      const format = parseFormat(url.searchParams.get("format"), "ansi");
+      let text = await cli.text([
+        "pane",
+        "read",
+        paneId,
+        "--source",
+        "recent-unwrapped",
+        "--lines",
+        String(requestedLines),
+        "--format",
+        format,
+      ]);
+      // Fresh panes have a visible prompt but no scrollback yet.
+      if (text.length === 0) {
+        text = await cli.text([
+          "pane",
+          "read",
+          paneId,
+          "--source",
+          "visible",
+          "--lines",
+          String(requestedLines),
+          "--format",
+          format,
+        ]);
+      }
+      const returnedLines = outputLineCount(text);
+      return json({
+        paneId,
+        format,
+        text,
+        requestedLines,
+        returnedLines,
+        complete: returnedLines < requestedLines,
+      });
     } catch (error) {
       if (error instanceof TypeError) return json({ ok: false, error: error.message }, 400);
       return errorResponse(error);
@@ -434,12 +490,14 @@ export function startSidecar(options: {
   ): Promise<void> => {
     if (!isCurrentWatch(ws, watch)) return;
     try {
+      // `recent-unwrapped` is empty until a pane has scrollback and after Pi
+      // clears for `/new`; `visible` always reflects the interactive screen.
       const text = await options.cli.text([
         "pane",
         "read",
         watch.paneId,
         "--source",
-        "recent-unwrapped",
+        "visible",
         "--lines",
         String(watch.lines),
         "--format",

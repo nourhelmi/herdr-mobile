@@ -12,6 +12,7 @@ struct PaneView: View {
     @State private var actionError: String?
     @State private var showClosePane = false
     @State private var isClosing = false
+    @State private var showHistory = false
 
     private var live: PaneSnapshot {
         let tree = session.orderedWorkspaces.flatMap(\.tabs).flatMap(\.panes)
@@ -26,7 +27,8 @@ struct PaneView: View {
             TerminalOutputView(
                 text: session.outputPaneId == live.id ? session.outputText : "",
                 emptyMessage: "Watching \(live.id) — output pins to the tail.",
-                pendingEcho: input.terminalBuffer
+                pendingEcho: input.terminalBuffer,
+                onReachTop: openHistory
             )
             Rectangle().fill(HerdrInk.rule).frame(height: 1)
             TerminalInputDock(
@@ -45,6 +47,9 @@ struct PaneView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
+                    Button("Output History") {
+                        openHistory()
+                    }
                     Button("Close Pane…", role: .destructive) {
                         showClosePane = true
                     }
@@ -63,6 +68,13 @@ struct PaneView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(CloseScopeCopy.paneMessage(title: title, paneId: live.id))
+        }
+        .sheet(isPresented: $showHistory) {
+            NavigationStack {
+                TerminalHistoryView(paneId: live.id, title: title)
+            }
+            .preferredColorScheme(.dark)
+            .tint(HerdrInk.phosphor)
         }
         .onDisappear { input.reset() }
     }
@@ -101,6 +113,11 @@ struct PaneView: View {
         }
         .padding(12)
         .background(HerdrInk.panel)
+    }
+
+    private func openHistory() {
+        dismissActiveKeyboard()
+        showHistory = true
     }
 
     private func closePane(id: String) async {

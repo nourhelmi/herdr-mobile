@@ -73,6 +73,7 @@ class FakeCli implements HerdrCli {
   deferPaneReads = false;
   activeReads = 0;
   maxActiveReads = 0;
+  readonly paneReadTextBySource = new Map<string, string>();
 
   async json<T>(_args: string[]): Promise<T> {
     throw new Error("FakeCli.json is not used by server integration tests");
@@ -85,6 +86,11 @@ class FakeCli implements HerdrCli {
     if (target === "failure") throw new CliError("herdr failed with secret=top-secret", 1);
 
     if (args[0] === "pane" && args[1] === "read") {
+      const sourceIndex = args.indexOf("--source");
+      const source = sourceIndex >= 0 ? args[sourceIndex + 1] : undefined;
+      if (source !== undefined && this.paneReadTextBySource.has(source)) {
+        return this.paneReadTextBySource.get(source)!;
+      }
       if (!this.deferPaneReads) return `output:${target}`;
       this.activeReads += 1;
       this.maxActiveReads = Math.max(this.maxActiveReads, this.activeReads);
@@ -166,7 +172,7 @@ function send(socket: WebSocket, value: unknown): void {
 }
 
 describe("sidecar HTTP integration", () => {
-  test("serves health, state, output, and keys with the frozen shapes and safe argv", async () => {
+  test("serves health, state, live output, history, and keys with safe argv", async () => {
     const { baseUrl, cli, engine } = startTestServer();
 
     const health = await fetch(`${baseUrl}/health`);
@@ -187,6 +193,17 @@ describe("sidecar HTTP integration", () => {
       paneId: "w1:p1",
       format: "ansi",
       text: "output:w1:p1",
+    });
+
+    const history = await fetch(`${baseUrl}/pane/w1%3Ap1/history?lines=42&format=ansi`);
+    expect(history.status).toBe(200);
+    expect(await jsonResponse(history)).toEqual({
+      paneId: "w1:p1",
+      format: "ansi",
+      text: "output:w1:p1",
+      requestedLines: 42,
+      returnedLines: 1,
+      complete: true,
     });
 
     const keys = await fetch(`${baseUrl}/agent/w1%3Ap1/keys`, {
@@ -211,6 +228,17 @@ describe("sidecar HTTP integration", () => {
         "read",
         "w1:p1",
         "--source",
+        "visible",
+        "--lines",
+        "42",
+        "--format",
+        "ansi",
+      ],
+      [
+        "pane",
+        "read",
+        "w1:p1",
+        "--source",
         "recent-unwrapped",
         "--lines",
         "42",
@@ -219,6 +247,28 @@ describe("sidecar HTTP integration", () => {
       ],
       ["agent", "send-keys", "w1:p1", "esc", "ctrl+c"],
       ["pane", "send-keys", "w1:p1", "up", "backspace"],
+    ]);
+  });
+
+  test("history falls back to the visible screen when a fresh pane has no scrollback", async () => {
+    const cli = new FakeCli();
+    cli.paneReadTextBySource.set("recent-unwrapped", "");
+    cli.paneReadTextBySource.set("visible", "fresh prompt\n");
+    const { baseUrl } = startTestServer(cli);
+
+    const response = await fetch(`${baseUrl}/pane/w1%3Ap1/history?lines=200&format=ansi`);
+    expect(response.status).toBe(200);
+    expect(await jsonResponse(response)).toEqual({
+      paneId: "w1:p1",
+      format: "ansi",
+      text: "fresh prompt\n",
+      requestedLines: 200,
+      returnedLines: 1,
+      complete: true,
+    });
+    expect(paneReads(cli).map((args) => args[args.indexOf("--source") + 1])).toEqual([
+      "recent-unwrapped",
+      "visible",
     ]);
   });
 
@@ -779,7 +829,7 @@ describe("sidecar WebSocket integration", () => {
     expect(cli.calls).toContainEqual(expect.arrayContaining(["pane", "read", "failure"]));
   });
 
-  test("watch format ansi is passed through to pane read and output frames", async () => {
+  test("watch mirrors the visible screen for fresh tabs and Pi /new, preserving ANSI", async () => {
     const { baseUrl, cli } = startTestServer();
     const { socket, messages } = await connectWebSocket(baseUrl);
     send(socket, { type: "watch", paneId: "w1:p1", lines: 20, format: "ansi" });
@@ -792,7 +842,7 @@ describe("sidecar WebSocket integration", () => {
       "read",
       "w1:p1",
       "--source",
-      "recent-unwrapped",
+      "visible",
       "--lines",
       "20",
       "--format",

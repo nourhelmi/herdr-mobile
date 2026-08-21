@@ -30,3 +30,8 @@ Esc, Ctrl-C, Tab, Backspace, and the arrow keys — sent over the pane-scoped
 While a pane's detail screen is open, it switches live between the bare
 terminal view and the dedicated agent view as Pi starts or exits in that
 pane, driven by the authoritative snapshot rather than by navigating back.
+
+Agent and bare-pane menus expose **Output History**. The history screen starts
+at the latest 200 ANSI rows and doubles the on-demand read as the user reaches
+the top, up to the oldest output Herdr exposes or the 2,000-row protocol cap.
+Dragging to the top of the live terminal opens the same history screen.

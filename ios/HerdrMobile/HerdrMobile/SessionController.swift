@@ -105,6 +105,10 @@ final class SessionController {
         try await client.sendPaneInput(paneId: paneId, text: text)
     }
 
+    func paneHistory(paneId: String, lines: Int) async throws -> PaneHistoryResponse {
+        try await client.paneHistory(paneId: paneId, lines: lines)
+    }
+
     func createWorkspace(label: String?) async throws {
         try await client.createWorkspace(label: label)
         try await refreshSnapshot(after: "Workspace was created")

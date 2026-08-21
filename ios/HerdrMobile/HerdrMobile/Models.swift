@@ -74,6 +74,15 @@ struct PaneOutputResponse: Codable, Equatable, Sendable {
     var text: String
 }
 
+struct PaneHistoryResponse: Codable, Equatable, Sendable {
+    var paneId: String
+    var format: String
+    var text: String
+    var requestedLines: Int
+    var returnedLines: Int
+    var complete: Bool
+}
+
 struct OKResponse: Codable, Equatable, Sendable {
     var ok: Bool
     var error: String?

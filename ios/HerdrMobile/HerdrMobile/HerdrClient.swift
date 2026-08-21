@@ -88,6 +88,13 @@ final class HerdrClient {
         ])
     }
 
+    func paneHistory(paneId: String, lines: Int = 200) async throws -> PaneHistoryResponse {
+        try await get(path: "/pane/\(Self.encodePath(paneId))/history", query: [
+            URLQueryItem(name: "lines", value: String(lines)),
+            URLQueryItem(name: "format", value: "ansi"),
+        ])
+    }
+
     func sendKeys(target: String, keys: [String]) async throws {
         try await post(path: "/agent/\(Self.encodePath(target))/keys", body: ["keys": keys])
     }

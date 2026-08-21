@@ -89,21 +89,54 @@ final class TerminalInputController {
         do {
             if newValue.hasPrefix(old) {
                 let delta = String(newValue.dropFirst(old.count))
-                if !delta.isEmpty {
-                    try await sendText(delta)
-                }
+                try await appendTerminalText(
+                    delta,
+                    after: old,
+                    sendText: sendText,
+                    sendKeys: sendKeys
+                )
             } else if old.hasPrefix(newValue) {
                 try await eraseTerminalText(from: old, to: newValue, sendKeys: sendKeys)
             } else {
                 try await eraseTerminalText(from: old, to: "", sendKeys: sendKeys)
-                if !newValue.isEmpty {
-                    try await sendText(newValue)
-                }
+                try await appendTerminalText(
+                    newValue,
+                    after: "",
+                    sendText: sendText,
+                    sendKeys: sendKeys
+                )
             }
             lastForwarded = newValue
             actionError = nil
         } catch {
             actionError = error.localizedDescription
+        }
+    }
+
+    /// `herdr pane send-text` cannot safely accept a positional value beginning
+    /// with `-`, which made a typed hyphen fail because edits are sent as deltas.
+    /// Route only the leading hyphens through Herdr's named `minus` key, then
+    /// forward the safe remainder as text. Preserve partial progress on failure.
+    private func appendTerminalText(
+        _ text: String,
+        after prefix: String,
+        sendText: @escaping (String) async throws -> Void,
+        sendKeys: @escaping ([String]) async throws -> Void
+    ) async throws {
+        guard !text.isEmpty else { return }
+        let leadingMinusCount = text.prefix { $0 == "-" }.count
+        var sentMinusCount = 0
+        while sentMinusCount < leadingMinusCount {
+            let batchSize = min(leadingMinusCount - sentMinusCount, 32)
+            try await sendKeys(Array(repeating: "minus", count: batchSize))
+            sentMinusCount += batchSize
+            lastForwarded = prefix + String(repeating: "-", count: sentMinusCount)
+        }
+
+        let remainder = String(text.dropFirst(leadingMinusCount))
+        if !remainder.isEmpty {
+            try await sendText(remainder)
+            lastForwarded = prefix + text
         }
     }
 

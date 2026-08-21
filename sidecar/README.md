@@ -32,6 +32,8 @@ printable text via `/pane/:id/input`.
 
 Input limits are enforced before invoking Herdr: JSON request bodies are capped at 64 KiB, input text at 16,000 characters, key arrays at 32 entries with 128 characters per key, and pane output at 2,000 lines for both HTTP and WebSocket requests. Limit violations return HTTP 400 or a WebSocket `error` frame.
 
+`GET /pane/:id/history` reads up to 2,000 `recent-unwrapped` ANSI rows on demand and reports whether the oldest available output was reached. It is intentionally separate from the 100ms visible-screen watch so browsing a long transcript does not make every live poll return the entire history. Fresh panes fall back to their visible screen.
+
 Herdr 0.8.0 does not honor `--` as an option delimiter for `pane read`, `pane send-text`, or `agent send-keys`. The sidecar therefore rejects pane IDs, agent targets, input text, and key names beginning with `-` rather than allowing them to be parsed as CLI flags.
 
 ## WebSocket
@@ -46,7 +48,7 @@ Connect with `GET /ws`. Actions remain HTTP-only.
 | client → server | `watch` | Watch one pane, replacing the previous watch; output is pushed immediately |
 | client → server | `unwatch` | Stop output polling |
 
-The server polls watched output about every 100ms. A successful `POST /pane/:id/input` or `POST /agent/:target/keys` immediately queues one serialized pane read for matching watchers (in-flight pokes coalesce to one follow-up). The server sends WebSocket protocol pings every 30 seconds. Exact fields are frozen in [`PROTOCOL.md`](../PROTOCOL.md#websocket--get-ws). v1.1 adds optional `watch.format` (`text` default, `ansi` for SGR clients), parsed `display` on agents, and HTTP create/input routes — see the v1.1 addendum.
+The server polls each watched pane's visible terminal screen about every 100ms. Using `visible` (rather than `recent-unwrapped`) keeps fresh shells and Pi immediately after `/new` renderable before they have scrollback. A successful `POST /pane/:id/input` or `POST /agent/:target/keys` immediately queues one serialized pane read for matching watchers (in-flight pokes coalesce to one follow-up). The server sends WebSocket protocol pings every 30 seconds. Exact fields are frozen in [`PROTOCOL.md`](../PROTOCOL.md#websocket--get-ws). v1.1 adds optional `watch.format` (`text` default, `ansi` for SGR clients), parsed `display` on agents, and HTTP create/input routes — see the v1.1 addendum.
 
 ## Test
 

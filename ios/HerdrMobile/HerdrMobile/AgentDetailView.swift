@@ -12,6 +12,7 @@ struct AgentDetailView: View {
     @State private var acknowledgementMessage: String?
     @State private var showClosePane = false
     @State private var isClosing = false
+    @State private var showHistory = false
 
     private var live: AgentSnapshot {
         session.snapshot?.agents.first { $0.paneId == agent.paneId } ?? agent
@@ -40,7 +41,8 @@ struct AgentDetailView: View {
             TerminalOutputView(
                 text: session.outputPaneId == live.paneId ? session.outputText : "",
                 emptyMessage: "Watching \(live.paneId) — output pins to the tail.",
-                pendingEcho: input.terminalBuffer
+                pendingEcho: input.terminalBuffer,
+                onReachTop: openHistory
             )
             Rectangle().fill(HerdrInk.rule).frame(height: 1)
             TerminalInputDock(
@@ -62,6 +64,9 @@ struct AgentDetailView: View {
             }
             ToolbarItem(placement: .primaryAction) {
                 Menu {
+                    Button("Output History") {
+                        openHistory()
+                    }
                     if canInterrupt {
                         Button("Interrupt") {
                             Task { await interrupt() }
@@ -85,6 +90,13 @@ struct AgentDetailView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(CloseScopeCopy.paneMessage(title: live.displayTitle, paneId: live.paneId))
+        }
+        .sheet(isPresented: $showHistory) {
+            NavigationStack {
+                TerminalHistoryView(paneId: live.paneId, title: live.displayTitle)
+            }
+            .preferredColorScheme(.dark)
+            .tint(HerdrInk.phosphor)
         }
         .onChange(of: live.state) { _, newState in
             if newState != "done" {
@@ -139,6 +151,11 @@ struct AgentDetailView: View {
         .accessibilityHint("Marks this done agent as seen")
         .accessibilityLabel(isAcknowledging ? "Acknowledging agent" : "Acknowledge")
         .accessibilityValue(isAcknowledging ? "In progress" : "")
+    }
+
+    private func openHistory() {
+        dismissActiveKeyboard()
+        showHistory = true
     }
 
     private func acknowledge() async {
