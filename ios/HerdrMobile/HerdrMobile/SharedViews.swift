@@ -162,8 +162,12 @@ private struct TerminalTextKitView: UIViewRepresentable {
         }
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            let isUserScrolling = scrollView.isTracking || scrollView.isDragging || scrollView.isDecelerating
+            if isUserScrolling {
+                pinnedToTail = isNearTail(scrollView)
+            }
             guard topRequestArmed,
-                  scrollView.isTracking || scrollView.isDragging || scrollView.isDecelerating,
+                  isUserScrolling,
                   scrollView.contentSize.height > scrollView.bounds.height + 1
             else { return }
             let top = -scrollView.adjustedContentInset.top
@@ -263,11 +267,9 @@ struct TerminalHistoryView: View {
     let title: String
 
     @State private var text = ""
-    @State private var requestedLines = 200
     @State private var returnedLines = 0
     @State private var isLoading = false
     @State private var complete = false
-    @State private var limitReached = false
     @State private var errorMessage: String?
 
     private let maximumLines = 2_000
@@ -278,8 +280,7 @@ struct TerminalHistoryView: View {
             Rectangle().fill(HerdrInk.rule).frame(height: 1)
             TerminalOutputView(
                 text: text,
-                emptyMessage: isLoading ? "Loading earlier output…" : "No terminal history available.",
-                onReachTop: requestEarlier
+                emptyMessage: isLoading ? "Loading terminal history…" : "No terminal history available."
             )
         }
         .background(HerdrInk.void)
@@ -294,7 +295,7 @@ struct TerminalHistoryView: View {
             }
         }
         .task(id: paneId) {
-            await load(lines: requestedLines)
+            await load(lines: maximumLines)
         }
     }
 
@@ -325,20 +326,9 @@ struct TerminalHistoryView: View {
 
     private var statusCopy: String {
         if let errorMessage { return errorMessage }
-        if isLoading && text.isEmpty { return "Loading recent output…" }
+        if isLoading && text.isEmpty { return "Loading complete history…" }
         if complete { return "Oldest available output · \(returnedLines) lines" }
-        if limitReached { return "History limit reached · \(returnedLines) lines" }
-        return "\(returnedLines) lines · scroll to the top to load earlier"
-    }
-
-    private func requestEarlier() {
-        guard !isLoading, !complete, !limitReached else { return }
-        let next = min(requestedLines * 2, maximumLines)
-        guard next > requestedLines else {
-            limitReached = true
-            return
-        }
-        Task { await load(lines: next) }
+        return "History limit reached · \(returnedLines) lines"
     }
 
     private func load(lines: Int) async {
@@ -349,10 +339,8 @@ struct TerminalHistoryView: View {
             let response = try await session.paneHistory(paneId: paneId, lines: lines)
             guard response.paneId == paneId else { return }
             text = response.text
-            requestedLines = response.requestedLines
             returnedLines = response.returnedLines
             complete = response.complete
-            limitReached = !response.complete && response.requestedLines >= maximumLines
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
